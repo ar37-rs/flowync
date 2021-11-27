@@ -1,7 +1,7 @@
 # Changelog
 
 ## [1.0.0] - 2021-11-28
-- Improvement(Flower): instead of polling the Mutex over and over, poll the mutex inside fn try_recv() only if needed.
+- Improvement(Flower): instead of polling the Mutex over and over, poll the mutex inside fn try_recv(|value| {...}, |result| {...}) only if needed.
 - No longer need to call fn start_flowing at initialization.
 - Remove a few unnecessary FNs.
 
