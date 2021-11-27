@@ -3,14 +3,16 @@ use flowync::{Flower, Leaper};
 #[test]
 fn drive() {
     let flower = Flower::<i32, String>::new(1);
-    let handle = flower.handle();
-    std::thread::spawn(move || {
-        handle.start_flowing();
-        for i in 0..5 {
-            println!("{}", i);
-            handle.send_current(i);
+    std::thread::spawn({
+        let handle = flower.handle();
+        move || {
+            handle.start_flowing();
+            for i in 0..5 {
+                println!("{}", i);
+                handle.send_current(i);
+            }
+            handle.ok("Ok".to_string());
         }
-        handle.ok("Ok".into());
     });
 
     let mut exit = false;
@@ -46,10 +48,11 @@ fn drive() {
     assert_eq!(sum, 10);
 
     let leaper = Leaper::<String>::new(1);
-    let handle = leaper.handle();
-    std::thread::spawn(move || {
-        handle.start_leaping();
-        handle.ok("Ok".into());
+    std::thread::spawn({
+        let handle = leaper.handle();
+        move || {
+            handle.ok("Ok".to_string());
+        }
     });
 
     let mut exit = false;

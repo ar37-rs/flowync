@@ -24,22 +24,30 @@ use std::{
 ///
 ///fn main() {
 ///    let flower = Flower::<i32, String>::new(1);
-///    let handle = flower.handle();
-///    std::thread::spawn(move || {
-///        handle.start_flowing();
-///        for i in 0..10 {
-///            handle.send_current(i);
-///            // // Return error.
-///            // if i >= 3 {
-///            //    return handle.err("Err".into());
-///            // }
+///    std::thread::spawn({
+///        let handle = flower.handle();
+///        move || {
+///            // Start flowing to initialize.
+///            handle.start_flowing();
+///            for i in 0..10 {
+///                // Send current value through channel, will block the spawned thread
+///                // until the option value successfully being polled in the main thread.
+///                handle.send_current(i);
+///                // // Return error if the job is failure, for example:
+///                // if i >= 3 {
+///                //    return handle.err("Err".to_string());
+///                // }
+///            }
+///            // And return ok if the job successfully completed.
+///            return handle.ok("Ok".to_string());
 ///        }
-///        handle.ok("Ok".into());
 ///    });
 ///
 ///    let mut exit = false;
 ///
 ///    loop {
+///        // This fn will deactivate itself if the result contains a value.
+///        // Note: this fn is non-blocking (won't block the current thread).
 ///        flower.try_recv(
 ///            |option| {
 ///                if let Some(value) = option {
@@ -71,7 +79,7 @@ where
     OK: Clone + Send + Sync + 'static,
 {
     state: Arc<(AtomicBool, Mutex<(Option<OK>, Option<String>)>)>,
-    flowing: Arc<(AtomicBool, Mutex<Option<SOME>>, Condvar)>,
+    flowing: Arc<(AtomicBool, Mutex<Option<SOME>>, Condvar, AtomicBool)>,
     id: usize,
 }
 
@@ -83,7 +91,12 @@ where
     pub fn new(id: usize) -> Self {
         Self {
             state: Arc::new((AtomicBool::new(false), Mutex::new((None, None)))),
-            flowing: Arc::new((AtomicBool::new(false), Mutex::new(None), Condvar::new())),
+            flowing: Arc::new((
+                AtomicBool::new(false),
+                Mutex::new(None),
+                Condvar::new(),
+                AtomicBool::new(false),
+            )),
             id,
         }
     }
@@ -105,6 +118,13 @@ where
     /// Check if the flower is flowing
     pub fn is_flowing(&self) -> bool {
         self.flowing.0.load(Ordering::Relaxed)
+    }
+
+    /// Cancel current flower handle.
+    ///
+    /// will do noting if not explicitly configured.
+    pub fn cancel(&self) {
+        self.flowing.3.store(true, Ordering::Relaxed)
     }
 
     /// Try receive the contained values of the flower
@@ -146,6 +166,7 @@ where
                 }
                 self.state.0.store(false, Ordering::Relaxed);
                 self.flowing.0.store(false, Ordering::Relaxed);
+                self.flowing.3.store(false, Ordering::Relaxed);
             }
         }
     }
@@ -194,7 +215,7 @@ where
     OK: Clone + Send + Sync + 'static,
 {
     state: Arc<(AtomicBool, Mutex<(Option<OK>, Option<String>)>)>,
-    flowing: Arc<(AtomicBool, Mutex<Option<SOME>>, Condvar)>,
+    flowing: Arc<(AtomicBool, Mutex<Option<SOME>>, Condvar, AtomicBool)>,
     id: usize,
 }
 
@@ -208,7 +229,8 @@ where
         self.id
     }
 
-    /// Call this fn every time at the very begining (runtime) to initialize,, otherwise the flower won't flow.
+    /// Call this fn every time at the very begining (runtime) to initialize,
+    /// otherwise the flower won't flow.
     pub fn start_flowing(&self) {
         self.flowing.0.store(true, Ordering::Relaxed);
     }
@@ -223,16 +245,21 @@ where
         self.flowing.0.load(Ordering::Relaxed)
     }
 
+    /// Check if the current flower should be canceled
+    pub fn should_cancel(&self) -> bool {
+        self.flowing.3.load(Ordering::Relaxed)
+    }
+
     /// Send current progress value
     pub fn send_current(&self, _value: SOME) {
-        let (_, mtx, cvar) = &*self.flowing;
+        let (_, mtx, cvar, _) = &*self.flowing;
         if let Ok(mut mtx) = mtx.lock() {
             *mtx = Some(_value);
             let _ = cvar.wait(mtx);
         }
     }
 
-    /// Contains the success value
+    /// Contains the success value for the result.
     pub fn ok(&self, _value: OK) {
         match self.state.1.lock() {
             Ok(mut result) => {
@@ -245,7 +272,7 @@ where
         }
     }
 
-    /// Contains the error value
+    /// Contains the error value for the result.
     pub fn err(&self, _value: String) {
         match self.state.1.lock() {
             Ok(mut result) => {
@@ -282,7 +309,7 @@ where
         if thread::panicking() {
             if !self.state.0.load(Ordering::Relaxed) {
                 self.err(format!(
-                    "Flower with id: {} error, the thread panicked maybe?",
+                    "the flower handle with id: {} error, the thread panicked maybe?",
                     self.id
                 ));
             }
@@ -319,18 +346,24 @@ where
 ///
 ///fn main() {
 ///    let leaper = Leaper::<String>::new(1);
-///    let handle = leaper.handle();
-///    std::thread::spawn(move || {
-///        handle.start_leaping();
-///        // // Return error.
-///        // return handle.err("Err".into());
-///        //
-///        handle.ok("Ok".into());
+///    std::thread::spawn({
+///        let handle = leaper.handle();
+///        move || {
+///            // // Return error if the job is failure, for example:
+///            // return handle.err("Err".to_string());
+///
+///            // And return ok if the job successfully completed.
+///            return handle.ok("Ok".to_string());
+///        }
 ///    });
 ///
 ///    let mut exit = false;
 ///
 ///    loop {
+///        // Starting from version 0.2.x instead of polling the mutex over and over,
+///        // the fn will be activated automatically if the handle return a value
+///        // and will deactivate itself if the result value successfully catched.
+///        // Note: this fn is non-blocking (won't block the current thread).
 ///        leaper.try_catch(|result| {
 ///            match result {
 ///                Ok(value) => {
@@ -353,7 +386,7 @@ pub struct Leaper<OK>
 where
     OK: Clone + Send + Sync + 'static,
 {
-    state: Arc<(AtomicBool, Mutex<(Option<OK>, Option<String>)>)>,
+    state: Arc<(AtomicBool, Mutex<(Option<OK>, Option<String>)>, AtomicBool)>,
     id: usize,
 }
 
@@ -363,7 +396,11 @@ where
 {
     pub fn new(id: usize) -> Self {
         Self {
-            state: Arc::new((AtomicBool::new(false), Mutex::new((None, None)))),
+            state: Arc::new((
+                AtomicBool::new(false),
+                Mutex::new((None, None)),
+                AtomicBool::new(false),
+            )),
             id,
         }
     }
@@ -381,9 +418,11 @@ where
         }
     }
 
-    /// Check if the leaper is leaping
-    pub fn is_leaping(&self) -> bool {
-        self.state.0.load(Ordering::Relaxed)
+    /// Cancel current leaper handle.
+    ///
+    /// will do noting if not explicitly configured.
+    pub fn cancel(&self) {
+        self.state.2.store(true, Ordering::Relaxed)
     }
 
     /// Try catch the value (result) of the leaper
@@ -405,6 +444,7 @@ where
                 _ => (),
             }
             self.state.0.store(false, Ordering::Relaxed);
+            self.state.2.store(false, Ordering::Relaxed);
         }
     }
 }
@@ -445,7 +485,7 @@ pub struct LeaperHandle<OK>
 where
     OK: Clone + Send + Sync + 'static,
 {
-    state: Arc<(AtomicBool, Mutex<(Option<OK>, Option<String>)>)>,
+    state: Arc<(AtomicBool, Mutex<(Option<OK>, Option<String>)>, AtomicBool)>,
     id: usize,
 }
 
@@ -458,22 +498,12 @@ where
         self.id
     }
 
-    /// Call this fn every time at the very begining (runtime) to initialize, otherwise the leaper won't leap.
-    pub fn start_leaping(&self) {
-        self.state.0.store(true, Ordering::Relaxed);
+    /// Check if the current leaper should be canceled
+    pub fn should_cancel(&self) -> bool {
+        self.state.2.load(Ordering::Relaxed)
     }
 
-    /// Pause the leaper from leaping
-    pub fn pause(&self) {
-        self.state.0.store(false, Ordering::Relaxed);
-    }
-
-    /// Check if the leaper is leaping
-    pub fn is_leaping(&self) -> bool {
-        self.state.0.load(Ordering::Relaxed)
-    }
-
-    /// Contains the success value
+    /// Contains the success value for the result.
     pub fn ok(&self, _value: OK) {
         match self.state.1.lock() {
             Ok(mut result) => {
@@ -486,7 +516,7 @@ where
         }
     }
 
-    /// Contains the error value
+    /// Contains the error value for the result.
     pub fn err(&self, _value: String) {
         match self.state.1.lock() {
             Ok(mut result) => {
@@ -520,7 +550,7 @@ where
         if thread::panicking() {
             if !self.state.0.load(Ordering::Relaxed) {
                 self.err(format!(
-                    "Leaper with id: {} error, the thread panicked maybe?",
+                    "the leaper handle with id: {} error, the thread panicked maybe?",
                     self.id
                 ));
             }
