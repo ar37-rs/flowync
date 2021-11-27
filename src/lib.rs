@@ -213,14 +213,14 @@ where
         self.flowing.0.store(true, Ordering::Relaxed);
     }
 
-    /// Fn start_flowing() with async topping for multi-threaded async runtime use case
-    pub async fn start_flowing_async(&self) {
-        self.flowing.0.store(true, Ordering::Relaxed);
-    }
-
     /// Pause the flower from flowing.
     pub fn pause(&self) {
         self.flowing.0.store(false, Ordering::Relaxed);
+    }
+
+    /// Check if the flower is flowing
+    pub fn is_flowing(&self) -> bool {
+        self.flowing.0.load(Ordering::Relaxed)
     }
 
     /// Send current progress value
@@ -463,14 +463,14 @@ where
         self.state.0.store(true, Ordering::Relaxed);
     }
 
-    /// Fn start_leaping() with async topping for multi-threaded async runtime use case
-    pub async fn start_leaping_async(&self) {
-        self.state.0.store(true, Ordering::Relaxed);
-    }
-
     /// Pause the leaper from leaping
     pub fn pause(&self) {
         self.state.0.store(false, Ordering::Relaxed);
+    }
+
+    /// Check if the leaper is leaping
+    pub fn is_leaping(&self) -> bool {
+        self.state.0.load(Ordering::Relaxed)
     }
 
     /// Contains the success value
