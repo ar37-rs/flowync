@@ -17,7 +17,7 @@ fn main() {
             for i in 0..10 {
                 // Send current value through channel, will block the spawned thread
                 // until the option value successfully being polled in the main thread.
-                handle.send_current(i);
+                handle.send(i);
                 // // Return error if the job is failure, for example:
                 // if i >= 3 {
                 //    return handle.err("Err".to_string());
