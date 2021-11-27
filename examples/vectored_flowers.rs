@@ -12,11 +12,10 @@ fn main() {
         std::thread::spawn({
             let handle = flower.handle();
             move || {
-                handle.start_flowing();
                 let id = handle.id();
                 // // Panic if need to.
                 // if id == 3 {
-                //    std::panic::panic_any("loudness")
+                //    std::panic::panic_any("loudness");
                 // }
 
                 let millis = id + 1;
@@ -28,7 +27,7 @@ fn main() {
                 match result {
                     Ok(value) => {
                         // Send current flower progress.
-                        handle.send_current(value)
+                        handle.send(value);
                     }
                     Err(e) => {
                         // Return error immediately if something not right, for example:
@@ -39,13 +38,14 @@ fn main() {
                 // Explicit cancelation example:
                 if handle.should_cancel() {
                     let value = format!("canceling the flower with id: {}", id);
-                    handle.send_current(value);
+                    handle.send(value);
                     return handle.err(format!("the flower with id: {} canceled", id));
                 }
+
                 return handle.ok(instant.elapsed().subsec_millis());
             }
         });
-        vec_opt_flowers.push(Some(flower))
+        vec_opt_flowers.push(Some(flower));
     }
 
     let num_flowers = vec_opt_flowers.len();
@@ -54,27 +54,22 @@ fn main() {
     loop {
         for i in 0..num_flowers {
             if let Some(flower) = &vec_opt_flowers[i] {
+                let id = flower.id();
+                // // Cancel if need to.
+                // if (id % 2 != 0) || (id == 0) {
+                //     flower.cancel();
+                // }
                 let mut done = false;
                 flower.try_recv(
-                    |option| {
-                        if let Some(value) = option {
-                            println!("{}\n", value)
-                        }
-
-                        // Cancel if need to.
-                        // if (flower.id() % 2 != 0) || (flower.id() == 0) {
-                        //     flower.cancel()
-                        // }
+                    |value| {
+                        println!("{}\n", value);
                     },
                     |result| {
                         match result {
-                            Ok(elapsed) => {
-                                println!(
-                                    "the flower with id: {} finished in: {:?} milliseconds\n",
-                                    flower.id(),
-                                    elapsed
-                                )
-                            }
+                            Ok(elapsed) => println!(
+                                "the flower with id: {} finished in: {:?} milliseconds\n",
+                                id, elapsed
+                            ),
                             Err(e) => println!("{}", e),
                         }
                         done = true;

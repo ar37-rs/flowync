@@ -14,8 +14,6 @@ fn main() {
     std::thread::spawn({
         let handle = flower.handle();
         move || {
-            // Start flowing to initialize.
-            handle.start_flowing();
             for i in 0..10 {
                 // Send current value through channel, will block the spawned thread
                 // until the option value successfully being polled in the main thread.
@@ -33,7 +31,9 @@ fn main() {
     let mut exit = false;
 
     loop {
-        // This fn will deactivate itself if the result contains a value.
+        // Instead of polling the mutex over and over,
+        // the fn will be activated automatically if the handle sending or return a value
+        // and will deactivate itself if the result value successfully received.
         // Note: this fn is non-blocking (won't block the current thread).
         flower.try_recv(
             |option| {

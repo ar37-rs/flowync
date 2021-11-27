@@ -13,7 +13,7 @@ use std::{
 ///
 /// Where:
 ///
-/// SOME: type of Some value (Option<'SOME'>)
+/// SOME: type of sender (channel) value
 ///
 /// OK: type of Ok value (Result<'OK', String>, and Err value always return String)
 ///
@@ -27,12 +27,10 @@ use std::{
 ///    std::thread::spawn({
 ///        let handle = flower.handle();
 ///        move || {
-///            // Start flowing to initialize.
-///            handle.start_flowing();
 ///            for i in 0..10 {
 ///                // Send current value through channel, will block the spawned thread
 ///                // until the option value successfully being polled in the main thread.
-///                handle.send_current(i);
+///                handle.send(i);
 ///                // // Return error if the job is failure, for example:
 ///                // if i >= 3 {
 ///                //    return handle.err("Err".to_string());
@@ -46,13 +44,13 @@ use std::{
 ///    let mut exit = false;
 ///
 ///    loop {
-///        // This fn will deactivate itself if the result contains a value.
+///        // Starting from version 1.x.x instead of polling the mutex over and over,
+///        // the fn will be activated automatically if the handle sending or return a value
+///        // and will deactivate itself if the result value successfully received.
 ///        // Note: this fn is non-blocking (won't block the current thread).
 ///        flower.try_recv(
-///            |option| {
-///                if let Some(value) = option {
-///                    println!("{}", value);
-///                }
+///            |value| {
+///                println!("{}", value);
 ///            },
 ///            |result| {
 ///                match result {
@@ -115,39 +113,35 @@ where
         }
     }
 
-    /// Check if the flower is flowing
-    pub fn is_flowing(&self) -> bool {
-        self.flowing.0.load(Ordering::Relaxed)
-    }
-
     /// Cancel current flower handle.
     ///
     /// will do noting if not explicitly configured.
     pub fn cancel(&self) {
-        self.flowing.3.store(true, Ordering::Relaxed)
+        self.flowing.3.store(true, Ordering::Relaxed);
     }
 
     /// Try receive the contained values of the flower
-    pub fn try_recv<Current: FnOnce(Option<SOME>) -> (), Done: FnOnce(Result<OK, String>) -> ()>(
+    pub fn try_recv<Current: FnOnce(SOME) -> (), Done: FnOnce(Result<OK, String>) -> ()>(
         &self,
         c: Current,
         d: Done,
     ) {
         if self.flowing.0.load(Ordering::Relaxed) {
             if !self.state.0.load(Ordering::Relaxed) {
-                match self.flowing.1.lock() {
-                    Ok(mut result) => {
-                        let opt = result.clone();
-                        if opt.is_some() {
-                            *result = None;
-                            self.flowing.2.notify_one();
-                            c(opt);
+                let value = match self.flowing.1.lock() {
+                    Ok(mut _result) => {
+                        let result = _result.clone();
+                        *_result = None;
+                        self.flowing.2.notify_one();
+                        if let Some(value) = result {
+                            value
+                        } else {
                             return;
                         }
                     }
-                    _ => (),
-                }
-                c(None);
+                    _ => return,
+                };
+                c(value);
             } else {
                 match self.state.1.lock() {
                     Ok(mut result) => {
@@ -164,9 +158,8 @@ where
                     }
                     _ => (),
                 }
-                self.state.0.store(false, Ordering::Relaxed);
-                self.flowing.0.store(false, Ordering::Relaxed);
                 self.flowing.3.store(false, Ordering::Relaxed);
+                self.flowing.0.store(false, Ordering::Relaxed);
             }
         }
     }
@@ -229,32 +222,18 @@ where
         self.id
     }
 
-    /// Call this fn every time at the very begining (runtime) to initialize,
-    /// otherwise the flower won't flow.
-    pub fn start_flowing(&self) {
-        self.flowing.0.store(true, Ordering::Relaxed);
-    }
-
-    /// Pause the flower from flowing.
-    pub fn pause(&self) {
-        self.flowing.0.store(false, Ordering::Relaxed);
-    }
-
-    /// Check if the flower is flowing
-    pub fn is_flowing(&self) -> bool {
-        self.flowing.0.load(Ordering::Relaxed)
-    }
-
     /// Check if the current flower should be canceled
     pub fn should_cancel(&self) -> bool {
         self.flowing.3.load(Ordering::Relaxed)
     }
 
     /// Send current progress value
-    pub fn send_current(&self, _value: SOME) {
+    pub fn send(&self, _value: SOME) {
         let (_, mtx, cvar, _) = &*self.flowing;
         if let Ok(mut mtx) = mtx.lock() {
             *mtx = Some(_value);
+            self.state.0.store(false, Ordering::Relaxed);
+            self.flowing.0.store(true, Ordering::Relaxed);
             let _ = cvar.wait(mtx);
         }
     }
@@ -267,6 +246,7 @@ where
                 *ok = Some(_value);
                 *error = None;
                 self.state.0.store(true, Ordering::Relaxed);
+                self.flowing.0.store(true, Ordering::Relaxed);
             }
             _ => (),
         }
@@ -280,6 +260,7 @@ where
                 *error = Some(_value);
                 *ok = None;
                 self.state.0.store(true, Ordering::Relaxed);
+                self.flowing.0.store(true, Ordering::Relaxed);
             }
             _ => (),
         }
@@ -422,7 +403,7 @@ where
     ///
     /// will do noting if not explicitly configured.
     pub fn cancel(&self) {
-        self.state.2.store(true, Ordering::Relaxed)
+        self.state.2.store(true, Ordering::Relaxed);
     }
 
     /// Try catch the value (result) of the leaper

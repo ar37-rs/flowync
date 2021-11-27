@@ -6,12 +6,11 @@ fn drive() {
     std::thread::spawn({
         let handle = flower.handle();
         move || {
-            handle.start_flowing();
             for i in 0..5 {
                 println!("{}", i);
-                handle.send_current(i);
+                handle.send(i);
             }
-            handle.ok("Ok".to_string());
+            return handle.ok("Ok".to_string());
         }
     });
 
@@ -21,11 +20,9 @@ fn drive() {
 
     loop {
         flower.try_recv(
-            |option| {
-                if let Some(value) = option {
-                    received_last_value = value;
-                    sum += value;
-                }
+            |value| {
+                received_last_value = value;
+                sum += value;
             },
             |result| {
                 match result {
@@ -51,7 +48,7 @@ fn drive() {
     std::thread::spawn({
         let handle = leaper.handle();
         move || {
-            handle.ok("Ok".to_string());
+            return handle.ok("Ok".to_string());
         }
     });
 

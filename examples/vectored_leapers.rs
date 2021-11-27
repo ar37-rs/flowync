@@ -12,7 +12,7 @@ fn main() {
                 let id = handle.id();
                 // // Panic if need to.
                 // if id == 3 {
-                //    std::panic::panic_any("loudness")
+                //    std::panic::panic_any("loudness");
                 // }
 
                 let millis = id + 1;
@@ -26,7 +26,7 @@ fn main() {
                 return handle.ok(instant.elapsed().subsec_millis());
             }
         });
-        vec_opt_leapers.push(Some(leaper))
+        vec_opt_leapers.push(Some(leaper));
     }
 
     let num_leapers = vec_opt_leapers.len();
@@ -35,10 +35,11 @@ fn main() {
     loop {
         for i in 0..num_leapers {
             if let Some(leaper) = &vec_opt_leapers[i] {
+                let id = leaper.id();
                 let mut done = false;
                 // Cancel if need to.
-                // if (leaper.id() % 2 != 0) || (leaper.id() == 0) {
-                //     leaper.cancel()
+                // if (id % 2 != 0) || (id == 0) {
+                //     leaper.cancel();
                 // }
 
                 leaper.try_catch(|result| {
@@ -46,11 +47,12 @@ fn main() {
                         Ok(elapsed) => {
                             println!(
                                 "the leaper with id: {} finished in: {:?} milliseconds\n",
-                                leaper.id(),
-                                elapsed
-                            )
+                                id, elapsed
+                            );
                         }
-                        Err(e) => println!("{}", e),
+                        Err(e) => {
+                            println!("{}", e);
+                        }
                     }
                     done = true;
                 });
