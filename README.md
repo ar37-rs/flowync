@@ -61,5 +61,5 @@ fn main() {
 }
 ```
 
-## more examples
+## More examples
 can be found here [here](https://github.com/Ar37-rs/flowync/tree/main/examples)
