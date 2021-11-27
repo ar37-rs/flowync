@@ -36,10 +36,8 @@ fn main() {
         // and will deactivate itself if the result value successfully received.
         // Note: this fn is non-blocking (won't block the current thread).
         flower.try_recv(
-            |option| {
-                if let Some(value) = option {
-                    println!("{}", value);
-                }
+            |value| {
+                println!("{}", value);
             },
             |result| {
                 match result {
