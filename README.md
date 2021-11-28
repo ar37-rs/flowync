@@ -18,6 +18,9 @@ fn main() {
                 // Send current value through channel, will block the spawned thread
                 // until the option value successfully being polled in the main thread.
                 handle.send(i);
+                // or handle.send_async(i).await; can be used from any async runtime,
+                // it won't block the other async operations.  
+                
                 // // Return error if the job is failure, for example:
                 // if i >= 3 {
                 //    return handle.err("Err".to_string());
