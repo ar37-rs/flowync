@@ -36,6 +36,7 @@ fn main() {
                 }
 
                 // Explicit cancelation example:
+                // Check if the current flower should be canceled
                 if handle.should_cancel() {
                     let value = format!("canceling the flower with id: {}", id);
                     handle.send(value);

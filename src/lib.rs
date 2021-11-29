@@ -70,7 +70,7 @@ where
 ///                // Send current value through channel, will block the spawned thread
 ///                // until the option value successfully being polled in the main thread.
 ///                handle.send(i);
-///                // or handle.send_async(i).await; can be used from any async runtime,
+///                // or handle.send_async(i).await; can be used from any multithreaded async runtime,
 ///                // it won't block the other async operations.  
 ///                
 ///                // // Return error if the job is failure, for example:
@@ -223,6 +223,7 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Flower")
             .field("state", &self.state)
+            .field("awaiting", &self.awaiting)
             .field("id", &self.id)
             .finish()
     }
@@ -302,7 +303,7 @@ where
         };
 
         if pending {
-            SendAsync {
+            AsyncSuspender {
                 awaiting: self.awaiting.clone(),
             }
             .await;
@@ -338,23 +339,23 @@ where
     }
 }
 
-struct SendAsync {
+struct AsyncSuspender {
     awaiting: Arc<(Mutex<Option<Waker>>, AtomicBool)>,
 }
 
-impl Future for SendAsync {
+impl Future for AsyncSuspender {
     type Output = ();
-    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.awaiting.0.lock() {
             Ok(mut waker) => {
                 if !self.awaiting.1.load(Ordering::Relaxed) {
                     Poll::Ready(())
                 } else {
-                    *waker = Some(_cx.waker().clone());
+                    *waker = Some(cx.waker().clone());
                     Poll::Pending
                 }
             }
-            // Rrevent blocking if something not ok with rust std mutex.
+            // Prevent blocking if something not ok with rust std mutex.
             _ => Poll::Ready(()),
         }
     }
@@ -399,6 +400,7 @@ where
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("FlowerHandle")
             .field("state", &self.state)
+            .field("awaiting", &self.awaiting)
             .field("id", &self.id)
             .finish()
     }

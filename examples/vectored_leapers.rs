@@ -20,6 +20,7 @@ fn main() {
                 std::thread::sleep(sleep_dur);
 
                 // Explicit cancelation example:
+                // Check if the current flower should be canceled
                 if handle.should_cancel() {
                     return handle.err(format!("the leaper with id: {} canceled", id));
                 }
