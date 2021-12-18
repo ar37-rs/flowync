@@ -39,9 +39,7 @@ fn main() {
         // and will deactivate itself if the result value successfully received.
         // Note: this fn is non-blocking (won't block the current thread).
         flower.try_recv(
-            |value| {
-                println!("{}", value);
-            },
+            |value| println!("{}\n", value),
             |result| {
                 match result {
                     Ok(value) => {

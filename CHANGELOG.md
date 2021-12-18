@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.9] - 2021-12-19
+- Feat(Flower/Leaper): fn result_is_ready and channel_is_present added
+- parking-lot feature added (std sync mutex and std sync condivar replacement)
+- a few optimizations.
+
 ## [1.8.1] - 2021-11-29
 - Internal: rename SendAsync to AsyncSuspender
 - Internal: add missing field inside impl Debug

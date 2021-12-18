@@ -61,10 +61,9 @@ fn main() {
                 //     flower.cancel();
                 // }
                 let mut done = false;
+
                 flower.try_recv(
-                    |value| {
-                        println!("{}\n", value);
-                    },
+                    |value| println!("{}\n", value),
                     |result| {
                         match result {
                             Ok(elapsed) => println!(

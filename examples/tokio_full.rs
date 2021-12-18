@@ -43,9 +43,7 @@ async fn main() {
 
     loop {
         flower.try_recv(
-            |value| {
-                println!("{}\n", value);
-            },
+            |value| println!("{}\n", value),
             |result| {
                 match result {
                     Ok(elapsed) => println!(
