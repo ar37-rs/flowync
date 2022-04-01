@@ -1,9 +1,9 @@
-#[cfg(feature = "parking-lot")]
-mod parking_lot_mutex;
-#[cfg(feature = "parking-lot")]
-pub use parking_lot_mutex::{Flower, FlowerHandle, Leaper, LeaperHandle};
+#[cfg(feature = "use-usync")]
+mod usync_mutex;
+#[cfg(feature = "use-usync")]
+pub use usync_mutex::{Flower, FlowerHandle};
 
-#[cfg(not(feature = "parking-lot"))]
+#[cfg(not(feature = "use-usync"))]
 mod std_mutex;
-#[cfg(not(feature = "parking-lot"))]
-pub use std_mutex::{Flower, FlowerHandle, Leaper, LeaperHandle};
+#[cfg(not(feature = "use-usync"))]
+pub use std_mutex::{Flower, FlowerHandle};

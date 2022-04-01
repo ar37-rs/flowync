@@ -11,6 +11,8 @@ async fn main() {
     let flower: Flower<String, u32> = Flower::new(1);
     tokio::spawn({
         let handle = flower.handle();
+        // Activate
+        handle.activate();
         async move {
             let id = handle.id();
             let result =
@@ -42,20 +44,25 @@ async fn main() {
     let mut done = false;
 
     loop {
-        flower.try_recv(
-            |value| println!("{}\n", value),
-            |result| {
-                match result {
-                    Ok(elapsed) => println!(
-                        "the flower with id: {} finished in: {:?} microseconds \n",
-                        flower.id(),
-                        elapsed
-                    ),
-                    Err(e) => println!("{}", e),
-                }
-                done = true;
-            },
-        );
+        if flower.is_active() {
+            flower
+                .try_recv(|channel| {
+                    if let Some(value) = channel {
+                        println!("{}\n", value);
+                    }
+                })
+                .on_complete(|result| {
+                    match result {
+                        Ok(elapsed) => println!(
+                            "the flower with id: {} finished in: {:?} microseconds \n",
+                            flower.id(),
+                            elapsed
+                        ),
+                        Err(err_msg) => println!("{}", err_msg),
+                    }
+                    done = true;
+                });
+        }
 
         // Cancel if need to
         // flower.cancel();

@@ -11,6 +11,8 @@ fn main() {
         let flower: Flower<String, u32> = Flower::new(i);
         std::thread::spawn({
             let handle = flower.handle();
+            // Activate
+            handle.activate();
             move || {
                 let id = handle.id();
                 // // Panic if need to.
@@ -55,30 +57,33 @@ fn main() {
     loop {
         for i in 0..num_flowers {
             if let Some(flower) = &vec_opt_flowers[i] {
-                let id = flower.id();
-                // // Cancel if need to.
-                // if (id % 2 != 0) || (id == 0) {
-                //     flower.cancel();
-                // }
-                let mut done = false;
-
-                flower.try_recv(
-                    |value| println!("{}\n", value),
-                    |result| {
-                        match result {
-                            Ok(elapsed) => println!(
-                                "the flower with id: {} finished in: {:?} milliseconds\n",
-                                id, elapsed
-                            ),
-                            Err(e) => println!("{}", e),
-                        }
-                        done = true;
-                    },
-                );
-
-                if done {
-                    vec_opt_flowers[i] = None;
-                    count_down -= 1;
+                if flower.is_active() {
+                    // // Cancel if need to.
+                    // if (id % 2 != 0) || (id == 0) {
+                    //     flower.cancel();
+                    // }
+                    let id = flower.id();
+                    let mut done = false;
+                    flower
+                        .try_recv(|channel| {
+                            if let Some(value) = channel {
+                                println!("{}\n", value);
+                            }
+                        })
+                        .on_complete(|result| {
+                            match result {
+                                Ok(elapsed) => println!(
+                                    "the flower with id: {} finished in: {:?} milliseconds\n",
+                                    id, elapsed
+                                ),
+                                Err(err_msg) => println!("{}", err_msg),
+                            }
+                            done = true;
+                        });
+                    if done {
+                        vec_opt_flowers[i] = None;
+                        count_down -= 1;
+                    }
                 }
             }
         }

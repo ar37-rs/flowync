@@ -1,13 +1,13 @@
-use flowync::{Flower, Leaper};
+use flowync::Flower;
 
 #[test]
 fn drive() {
     let flower = Flower::<i32, String>::new(1);
     std::thread::spawn({
         let handle = flower.handle();
+        handle.activate();
         move || {
-            for i in 0..5 {
-                println!("{}", i);
+            for i in 1..20 {
                 handle.send(i);
             }
             return handle.ok("Ok".to_string());
@@ -19,54 +19,32 @@ fn drive() {
     let mut received_last_value = 0;
 
     loop {
-        flower.try_recv(
-            |value| {
-                received_last_value = value;
-                sum += value;
-            },
-            |result| {
-                match result {
-                    Ok(value) => {
-                        assert_eq!("Ok", &value);
+        if flower.is_active() {
+            flower
+                .try_recv(|channel| {
+                    if let Some(value) = channel {
+                        received_last_value = value;
+                        sum += value;
+                        println!("{}", value);
                     }
-                    _ => (),
-                }
+                })
+                .on_complete(|result| {
+                    match result {
+                        Ok(value) => {
+                            assert_eq!("Ok", &value);
+                        }
+                        _ => (),
+                    }
 
-                exit = true;
-            },
-        );
+                    exit = true;
+                });
+        }
 
         if exit {
             break;
         }
     }
 
-    assert_eq!(received_last_value, 4);
-    assert_eq!(sum, 10);
-
-    let leaper = Leaper::<String>::new(1);
-    std::thread::spawn({
-        let handle = leaper.handle();
-        move || {
-            return handle.ok("Ok".to_string());
-        }
-    });
-
-    let mut exit = false;
-
-    loop {
-        leaper.try_catch(|result| {
-            match result {
-                Ok(value) => {
-                    assert_eq!("Ok", &value);
-                }
-                _ => (),
-            }
-            exit = true;
-        });
-
-        if exit {
-            break;
-        }
-    }
+    assert_eq!(received_last_value, 19);
+    assert_eq!(sum, 190);
 }

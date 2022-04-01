@@ -7,14 +7,15 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
     task::{Context, Poll, Waker},
 };
-use parking_lot::{Condvar, Mutex};
 use std::{sync::Arc, thread};
+use usync::{Condvar, Mutex};
 
 struct FlowerState<SOME, OK>
 where
     SOME: Clone + Send + Sync + 'static,
     OK: Clone + Send + Sync + 'static,
 {
+    activated: AtomicBool,
     result_ready: AtomicBool,
     channel_present: AtomicBool,
     mtx: Mutex<(Option<SOME>, Option<OK>, Option<String>)>,
@@ -34,6 +35,7 @@ where
             .field("mtx", &self.mtx)
             .field("cvar", &self.cvar)
             .field("canceled", &self.canceled)
+            .field("activated", &self.activated)
             .finish()
     }
 }
@@ -63,13 +65,14 @@ where
 ///    let flower = Flower::<i32, String>::new(1);
 ///    std::thread::spawn({
 ///        let handle = flower.handle();
+///        // Activate
+///        handle.activate();
 ///        move || {
 ///            for i in 0..10 {
-///                // Send current value through channel, will block the spawned thread
+///                // // Send current value through channel, will block the spawned thread
 ///                // until the option value successfully being polled in the main thread.
 ///                handle.send(i);
 ///                // or handle.send_async(i).await; can be used from any multithreaded async runtime,
-///                // it won't block the other async operations.  
 ///                
 ///                // // Return error if the job is failure, for example:
 ///                // if i >= 3 {
@@ -84,24 +87,20 @@ where
 ///    let mut exit = false;
 ///
 ///    loop {
-///        // Starting from version 1.8.x instead of polling the mutex over and over,
+///        // instead of polling the mutex over and over,
 ///        // the fn will be activated automatically if the handle sending or return a value
 ///        // and will deactivate itself if the result value successfully received.
 ///        // Note: this fn is non-blocking (won't block the current thread).
-///        flower.try_recv(
-///            |value| println!("{}\n", value),
-///            |result| {
-///                match result {
-///                    Ok(value) => {
-///                        println!("{}", value);
-///                    }
-///                    Err(e) => {
-///                        println!("{}", e);
-///                    }
+///        if flower.is_active() {
+///            flower.try_recv(|channel| {
+///                if let Some(value) = channel {
+///                    println!("{}", value);
 ///                }
-///                exit = true;
-///            }
-///        );
+///            }).on_complete(|result| match result {
+///                Ok(value) => println!("{}", value),
+///                Err(err_msg) => println!("{}", err_msg),
+///            });
+///        }
 ///
 ///        if exit {
 ///            break;
@@ -127,6 +126,7 @@ where
     pub fn new(id: usize) -> Self {
         Self {
             state: Arc::new(FlowerState {
+                activated: AtomicBool::new(false),
                 result_ready: AtomicBool::new(false),
                 channel_present: AtomicBool::new(false),
                 mtx: Mutex::new((None, None, None)),
@@ -165,6 +165,11 @@ where
         self.state.canceled.load(Ordering::Relaxed)
     }
 
+    /// Check if the current flower is active
+    pub fn is_active(&self) -> bool {
+        self.state.activated.load(Ordering::Relaxed)
+    }
+
     /// Check if result value of the flower is ready
     pub fn result_is_ready(&self) -> bool {
         self.state.result_ready.load(Ordering::Relaxed)
@@ -175,15 +180,8 @@ where
         self.state.channel_present.load(Ordering::Relaxed)
     }
 
-    /// Try receive the flower values
-    pub fn try_recv<
-        ChannelValue: FnOnce(SOME) -> (),
-        ResultValue: FnOnce(Result<OK, String>) -> (),
-    >(
-        &self,
-        cv: ChannelValue,
-        rv: ResultValue,
-    ) {
+    /// Try receive the flower channel value
+    pub fn try_recv(&self, f: impl FnOnce(Option<SOME>) -> ()) -> &Self {
         if self.state.channel_present.load(Ordering::Relaxed) {
             let result = self.state.mtx.lock().0.take();
             self.state.channel_present.store(false, Ordering::Relaxed);
@@ -197,18 +195,22 @@ where
             } else {
                 self.state.cvar.notify_one();
             }
+            f(result)
+        }
+        self
+    }
 
-            if let Some(value) = result {
-                cv(value);
-            }
-        } else if self.state.result_ready.load(Ordering::Relaxed) {
+    /// Process the flower result
+    pub fn on_complete(&self, f: impl FnOnce(Result<OK, String>) -> ()) {
+        if self.state.result_ready.load(Ordering::Relaxed) {
             let mut result = self.state.mtx.lock();
             let (_, ok, error) = &mut *result;
             self.state.result_ready.store(false, Ordering::Relaxed);
+            self.state.activated.store(false, Ordering::Relaxed);
             if let Some(value) = ok.take() {
-                rv(Ok(value));
+                f(Ok(value));
             } else if let Some(value) = error.take() {
-                rv(Err(value));
+                f(Err(value));
             }
         }
     }
@@ -247,7 +249,11 @@ where
     SOME: Clone + Send + Sync + 'static,
     OK: Clone + Send + Sync + 'static,
 {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        if thread::panicking() {
+            self.state.activated.store(false, Ordering::Relaxed)
+        }
+    }
 }
 
 /// A handle for the Flower
@@ -269,6 +275,16 @@ where
     /// Get ID of the flower.
     pub fn id(&self) -> usize {
         self.id
+    }
+
+    /// Activate current flower
+    pub fn activate(&self) {
+        self.state.activated.store(true, Ordering::Relaxed);
+    }
+
+    /// Check if the current flower is active
+    pub fn is_active(&self) -> bool {
+        self.state.activated.load(Ordering::Relaxed)
     }
 
     /// Check if the current flower should be canceled
@@ -372,268 +388,6 @@ where
         f.debug_struct("FlowerHandle")
             .field("state", &self.state)
             .field("awaiting", &self.awaiting)
-            .field("id", &self.id)
-            .finish()
-    }
-}
-
-struct LeaperState<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    result_ready: AtomicBool,
-    mtx: Mutex<(Option<OK>, Option<String>)>,
-    canceled: AtomicBool,
-}
-
-impl<OK> Debug for LeaperState<OK>
-where
-    OK: Debug + Clone + Send + Sync + 'static,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LeaperState")
-            .field("result_ready", &self.result_ready)
-            .field("mtx", &self.mtx)
-            .field("canceled", &self.canceled)
-            .finish()
-    }
-}
-
-impl<OK> Drop for LeaperState<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    fn drop(&mut self) {}
-}
-
-/// (Flower without channel)
-///
-/// spring in a long way, jump to a great height, or with great force.
-///
-/// Where:
-///
-/// OK: type of Ok value of the Result (Result<'OK', String>, and Err value always return String)
-///
-/// # Quick Example:
-///
-///```
-///use flowync::Leaper;
-///
-///fn main() {
-///    let leaper = Leaper::<String>::new(1);
-///    std::thread::spawn({
-///        let handle = leaper.handle();
-///        move || {
-///            // // Return error if the job is failure, for example:
-///            // return handle.err("Err".to_string());
-///
-///            // And return ok if the job successfully completed.
-///            return handle.ok("Ok".to_string());
-///        }
-///    });
-///
-///    let mut exit = false;
-///
-///    loop {
-///        // Starting from version 0.2.x instead of polling the mutex over and over,
-///        // the fn will be activated automatically if the handle return a value
-///        // and will deactivate itself if the result value successfully catched.
-///        // Note: this fn is non-blocking (won't block the current thread).
-///        leaper.try_catch(|result| {
-///            match result {
-///                Ok(value) => {
-///                    println!("{}", value);
-///                }
-///                Err(e) => {
-///                    println!("{}", e);
-///                }
-///            }
-///            exit = true;
-///        });
-///
-///        if exit {
-///            break;
-///        }
-///    }
-///}
-/// ```
-pub struct Leaper<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    state: Arc<LeaperState<OK>>,
-    id: usize,
-}
-
-impl<OK> Leaper<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    pub fn new(id: usize) -> Self {
-        Self {
-            state: Arc::new(LeaperState {
-                result_ready: AtomicBool::new(false),
-                mtx: Mutex::new((None, None)),
-                canceled: AtomicBool::new(false),
-            }),
-            id,
-        }
-    }
-
-    /// Get ID of the leaper
-    pub fn id(&self) -> usize {
-        self.id
-    }
-
-    /// Get handle of the leaper.
-    pub fn handle(&self) -> LeaperHandle<OK> {
-        self.state.canceled.store(false, Ordering::Relaxed);
-        LeaperHandle {
-            state: Clone::clone(&self.state),
-            id: self.id,
-        }
-    }
-
-    /// Cancel current leaper handle.
-    ///
-    /// will do noting if not explicitly configured.
-    pub fn cancel(&self) {
-        self.state.canceled.store(true, Ordering::Relaxed);
-    }
-
-    /// Check if the leaper is canceled
-    pub fn is_canceled(&self) -> bool {
-        self.state.canceled.load(Ordering::Relaxed)
-    }
-
-    /// Check if the result is ready to catch
-    pub fn result_is_ready(&self) -> bool {
-        self.state.result_ready.load(Ordering::Relaxed)
-    }
-
-    /// Try catch the leaper value (result).
-    pub fn try_catch<ResultValue: FnOnce(Result<OK, String>) -> ()>(&self, rv: ResultValue) {
-        if self.state.result_ready.load(Ordering::Relaxed) {
-            let mut result = self.state.mtx.lock();
-            let (ok, error) = &mut *result;
-            self.state.result_ready.store(false, Ordering::Relaxed);
-            if let Some(value) = ok.take() {
-                rv(Ok(value));
-            } else if let Some(value) = error.take() {
-                rv(Err(value));
-            }
-        }
-    }
-}
-
-impl<OK> Debug for Leaper<OK>
-where
-    OK: Debug + Clone + Send + Sync + 'static,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Leaper")
-            .field("state", &self.state)
-            .field("id", &self.id)
-            .finish()
-    }
-}
-
-impl<OK> Clone for Leaper<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            state: Clone::clone(&self.state),
-            id: self.id,
-        }
-    }
-}
-
-impl<OK> Drop for Leaper<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    fn drop(&mut self) {}
-}
-
-/// A handle for the Leaper
-pub struct LeaperHandle<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    state: Arc<LeaperState<OK>>,
-    id: usize,
-}
-
-impl<OK> LeaperHandle<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    /// Get ID of the leaper
-    pub fn id(&self) -> usize {
-        self.id
-    }
-
-    /// Check if the current leaper should be canceled
-    pub fn should_cancel(&self) -> bool {
-        self.state.canceled.load(Ordering::Relaxed)
-    }
-
-    /// Contains the success value for the result.
-    pub fn ok(&self, _value: OK) {
-        let mut result = self.state.mtx.lock();
-        let (ok, error) = &mut *result;
-        *ok = Some(_value);
-        *error = None;
-        self.state.result_ready.store(true, Ordering::Relaxed);
-    }
-
-    /// Contains the error value for the result.
-    pub fn err(&self, _value: String) {
-        let mut result = self.state.mtx.lock();
-        let (ok, error) = &mut *result;
-        *error = Some(_value);
-        *ok = None;
-        self.state.result_ready.store(true, Ordering::Relaxed);
-    }
-}
-
-impl<OK> Clone for LeaperHandle<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            state: Clone::clone(&self.state),
-            id: self.id,
-        }
-    }
-}
-
-impl<OK> Drop for LeaperHandle<OK>
-where
-    OK: Clone + Send + Sync + 'static,
-{
-    fn drop(&mut self) {
-        if thread::panicking() {
-            if !self.state.result_ready.load(Ordering::Relaxed) {
-                self.err(format!(
-                    "the leaper handle with id: {} error, the thread panicked maybe?",
-                    self.id
-                ));
-            }
-        }
-    }
-}
-
-impl<OK> Debug for LeaperHandle<OK>
-where
-    OK: Debug + Clone + Send + Sync + 'static,
-{
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LeaperHandle")
-            .field("state", &self.state)
             .field("id", &self.id)
             .finish()
     }
