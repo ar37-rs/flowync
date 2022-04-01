@@ -97,8 +97,11 @@ where
 ///                    println!("{}", value);
 ///                }
 ///            }).on_complete(|result| match result {
-///                Ok(value) => println!("{}", value),
-///                Err(err_msg) => println!("{}", err_msg),
+///                match result {
+///                    Ok(value) => println!("{}", value),
+///                    Err(err_msg) => println!("{}", err_msg),
+///                }
+///                exit = true;
 ///            });
 ///        }
 ///

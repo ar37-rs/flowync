@@ -1,12 +1,3 @@
-# Flowync
-
-[![Crates.io](https://img.shields.io/crates/v/flowync.svg)](https://crates.io/crates/flowync)
-[![Flowync documentation](https://docs.rs/flowync/badge.svg)](https://docs.rs/flowync)
-[![CI](https://github.com/Ar37-rs/flowync/actions/workflows/ci.yml/badge.svg)](https://github.com/Ar37-rs/flowync/actions/workflows/ci.yml)
-
-## Quick Example
-
-```rust
 use flowync::Flower;
 
 fn main() {
@@ -58,7 +49,3 @@ fn main() {
         }
     }
 }
-```
-
-## More examples
-can be found here [here](https://github.com/Ar37-rs/flowync/tree/main/examples)
