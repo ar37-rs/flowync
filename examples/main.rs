@@ -14,9 +14,9 @@ fn main() {
                 // or handle.send_async(i).await; can be used from any multithreaded async runtime,
 
                 // // Return error if the job is failure, for example:
-                if i >= 3 {
-                    return handle.err("Err");
-                }
+                // if i >= 3 {
+                //    return handle.err("Err");
+                // }
             }
             // And return ok if the job successfully completed.
             return handle.ok("Ok".to_string());
