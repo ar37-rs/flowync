@@ -199,6 +199,8 @@ where
                 self.state.cvar.notify_one();
             }
             f(result)
+        } else {
+            f(None)
         }
         self
     }
