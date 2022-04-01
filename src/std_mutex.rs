@@ -61,7 +61,7 @@ where
 ///```
 ///use flowync::Flower;
 ///
-///fn main() {
+///fn _main() {
 ///    let flower = Flower::<i32, String>::new(1);
 ///    std::thread::spawn({
 ///        let handle = flower.handle();
@@ -183,16 +183,15 @@ where
     }
 
     /// Try receive the flower channel value
-    pub fn try_recv(&self, f: impl FnOnce(Option<SOME>) -> ()) -> &Self {
+    pub fn try_recv(&self, f: impl FnOnce(Option<SOME>)) -> &Self {
         if self.state.channel_present.load(Ordering::Relaxed) {
             let result = self.state.mtx.lock().unwrap().0.take();
             self.state.channel_present.store(false, Ordering::Relaxed);
             if self.awaiting.1.load(Ordering::Relaxed) {
                 let mut mg_opt_waker = self.awaiting.0.lock().unwrap();
                 self.awaiting.1.store(false, Ordering::Relaxed);
-                match mg_opt_waker.take() {
-                    Some(waker) => waker.wake(),
-                    _ => (),
+                if let Some(waker) = mg_opt_waker.take() {
+                    waker.wake();
                 }
             } else {
                 self.state.cvar.notify_one();
@@ -205,7 +204,7 @@ where
     }
 
     /// Process the flower result
-    pub fn on_complete(&self, f: impl FnOnce(Result<OK, String>) -> ()) {
+    pub fn on_complete(&self, f: impl FnOnce(Result<OK, String>)) {
         if self.state.result_ready.load(Ordering::Relaxed) {
             let mut result = self.state.mtx.lock().unwrap();
             let (_, ok, error) = &mut *result;
@@ -302,7 +301,7 @@ where
         mtx.0 = Some(_value);
         self.state.channel_present.store(true, Ordering::Relaxed);
         self.awaiting.1.store(false, Ordering::Relaxed);
-        let _ = self.state.cvar.wait(mtx);
+        let _e = self.state.cvar.wait(mtx);
     }
 
     /// Send current progress value asynchronously.
@@ -372,13 +371,11 @@ where
     OK: Clone + Send + Sync + 'static,
 {
     fn drop(&mut self) {
-        if thread::panicking() {
-            if !self.state.result_ready.load(Ordering::Relaxed) {
-                self.err(format!(
-                    "the flower handle with id: {} error, the thread panicked maybe?",
-                    self.id
-                ));
-            }
+        if thread::panicking() && !self.state.result_ready.load(Ordering::Relaxed) {
+            self.err(format!(
+                "the flower handle with id: {} error, the thread panicked maybe?",
+                self.id
+            ));
         }
     }
 }
