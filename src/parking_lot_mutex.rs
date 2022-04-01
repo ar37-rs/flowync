@@ -87,8 +87,7 @@ where
 ///    let mut exit = false;
 ///
 ///    loop {
-///        // instead of polling the mutex over and over,
-///        // the fn will be activated automatically if the handle sending or return a value
+///        // Instead of polling the mutex over and over, check if the flower is_active()
 ///        // and will deactivate itself if the result value successfully received.
 ///        // Note: this fn is non-blocking (won't block the current thread).
 ///        if flower.is_active() {
