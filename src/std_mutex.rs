@@ -96,7 +96,7 @@ where
 ///                if let Some(value) = channel {
 ///                    println!("{}", value);
 ///                }
-///            }).on_complete(|result| match result {
+///            }).on_complete(|result| {
 ///                match result {
 ///                    Ok(value) => println!("{}", value),
 ///                    Err(err_msg) => println!("{}", err_msg),
