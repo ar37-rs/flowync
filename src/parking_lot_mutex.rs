@@ -7,8 +7,8 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
     task::{Context, Poll, Waker},
 };
+use parking_lot::{Condvar, Mutex};
 use std::{sync::Arc, thread};
-use usync::{Condvar, Mutex};
 
 struct FlowerState<SOME, OK>
 where
@@ -76,7 +76,7 @@ where
 ///                
 ///                // // Return error if the job is failure, for example:
 ///                // if i >= 3 {
-///                //    return handle.err("Err".to_string());
+///                //    return handle.err("Err");
 ///                // }
 ///            }
 ///            // And return ok if the job successfully completed.
@@ -199,6 +199,8 @@ where
                 self.state.cvar.notify_one();
             }
             f(result)
+        } else {
+            f(None)
         }
         self
     }
@@ -325,10 +327,10 @@ where
     }
 
     /// Contains the error value for the result.
-    pub fn err(&self, _value: String) {
+    pub fn err(&self, _value: impl Into<String>) {
         let mut result = self.state.mtx.lock();
         let (_, ok, error) = &mut *result;
-        *error = Some(_value);
+        *error = Some(_value.into());
         *ok = None;
         self.state.result_ready.store(true, Ordering::Relaxed);
     }

@@ -24,7 +24,7 @@ fn main() {
                 
                 // // Return error if the job is failure, for example:
                 // if i >= 3 {
-                //    return handle.err("Err".to_string());
+                //    return handle.err("Err");
                 // }
             }
             // And return ok if the job successfully completed.

@@ -1,8 +1,8 @@
 [package]
 name = "flowync"
-version = "2.0.2"
+version = "2.0.5"
 authors = ["Ar37-rs <adyaro37@gmail.com>"]
-edition = "2021"
+edition = "2018"
 description = "A simple utility for multithreading a/synchronization"
 documentation = "https://docs.rs/flowync"
 readme = "README.md"
@@ -13,10 +13,10 @@ repository = "https://github.com/Ar37-rs/flowync"
 
 [features]
 default = []
-use-usync = ["usync"]
+parking-lot = ["parking_lot"]
 
-[dependencies.usync]
-version = "0.1"
+[dependencies.parking_lot]
+version = "0.12"
 optional = true
 
 [dev-dependencies]

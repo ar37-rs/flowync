@@ -1,5 +1,6 @@
 # Changelog
-## [2.0.0] - 2022-4-1
+
+## [2.0.x] - 2022-4-1
 - Breaking change:
     * remove Leaper
     * refactor flower
