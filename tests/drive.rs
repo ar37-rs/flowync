@@ -1,3 +1,5 @@
+// #![allow(clippy::needless_return)]
+
 use flowync::Flower;
 
 #[test]
@@ -10,7 +12,7 @@ fn drive() {
             for i in 1..20 {
                 handle.send(i);
             }
-            return handle.ok("Ok".to_string());
+            handle.ok("Ok".to_string());
         }
     });
 

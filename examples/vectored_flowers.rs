@@ -1,20 +1,25 @@
+// #![allow(clippy::needless_return)]
+
 use flowync::Flower;
 use std::{
     io::Error,
     time::{Duration, Instant},
 };
 
+type TestFlower = Flower<String, u32>;
+
 fn main() {
     let instant: Instant = Instant::now();
     let mut vec_opt_flowers = Vec::new();
     for i in 0..5 {
-        let flower: Flower<String, u32> = Flower::new(i);
+        let flower: TestFlower = Flower::new(i);
         std::thread::spawn({
-            let handle = flower.handle();
-            // Activate
-            handle.activate();
+            let this = flower.handle();
+            // Activate if need too, actually needless on this context because we use Option
+            // this.activate();
             move || {
-                let id = handle.id();
+                let id = this.id();
+
                 // // Panic if need to.
                 // if id == 3 {
                 //    std::panic::panic_any("loudness");
@@ -23,29 +28,31 @@ fn main() {
                 let millis = id + 1;
                 let sleep_dur = Duration::from_millis((10 * millis) as u64);
                 std::thread::sleep(sleep_dur);
-                let result = Ok::<String, Error>(
-                    format!("the flower with id: {} wake up from sleep", id).into(),
-                );
+                let result =
+                    Ok::<String, Error>(format!("the flower with id: {} wake up from sleep", id));
                 match result {
                     Ok(value) => {
                         // Send current flower progress.
-                        handle.send(value);
+                        this.send(value);
                     }
                     Err(e) => {
                         // Return error immediately if something not right, for example:
-                        return handle.err(e.to_string());
+                        return this.err(e.to_string());
                     }
                 }
 
                 // Explicit cancelation example:
                 // Check if the current flower should be canceled
-                if handle.should_cancel() {
+                if this.should_cancel() {
                     let value = format!("canceling the flower with id: {}", id);
-                    handle.send(value);
-                    return handle.err(format!("the flower with id: {} canceled", id));
+                    this.send(value);
+                    return this.err(format!("the flower with id: {} canceled", id));
                 }
 
-                return handle.ok(instant.elapsed().subsec_millis());
+                // Finishing
+                // either return this.ok(instant.elapsed().subsec_millis()); or
+                this.ok(instant.elapsed().subsec_millis());
+                // both are ok
             }
         });
         vec_opt_flowers.push(Some(flower));
@@ -55,40 +62,52 @@ fn main() {
     let mut count_down = num_flowers;
 
     loop {
-        for i in 0..num_flowers {
-            if let Some(flower) = &vec_opt_flowers[i] {
-                if flower.is_active() {
-                    // // Cancel if need to.
-                    // if (id % 2 != 0) || (id == 0) {
-                    //     flower.cancel();
-                    // }
-                    let id = flower.id();
-                    let mut done = false;
-                    flower
-                        .try_recv(|channel| {
-                            if let Some(value) = channel {
-                                println!("{}\n", value);
-                            }
-                        })
-                        .on_complete(|result| {
-                            match result {
-                                Ok(elapsed) => println!(
-                                    "the flower with id: {} finished in: {:?} milliseconds\n",
-                                    id, elapsed
-                                ),
-                                Err(err_msg) => println!("{}", err_msg),
-                            }
-                            done = true;
-                        });
-                    if done {
-                        vec_opt_flowers[i] = None;
-                        count_down -= 1;
-                    }
+        vec_opt_flowers.iter_mut().for_each(|opt_flower| {
+            if let Some(flower) = opt_flower {
+                let id = flower.id();
+
+                // // Cancel if need to.
+                // if (id % 2 != 0) || (id == 0) {
+                //     flower.cancel();
+                // }
+
+                let mut done = false;
+                flower
+                    .try_recv(|channel| {
+                        if let Some(value) = channel {
+                            println!("{}\n", value);
+                        }
+                    })
+                    .on_complete(|result| {
+                        match result {
+                            Ok(elapsed) => println!(
+                                "the flower with id: {} finished in: {:?} milliseconds\n",
+                                id, elapsed
+                            ),
+                            Err(err_msg) => println!("{}", err_msg),
+                        }
+                        done = true;
+                    });
+
+                if done {
+                    // Set to None to free later
+                    *opt_flower = None;
+                    count_down -= 1;
                 }
             }
-        }
+        });
+
+        // Free completed flower
+        vec_opt_flowers = vec_opt_flowers
+            .into_iter()
+            .filter(|opt_flower| opt_flower.is_some())
+            .collect::<Vec<_>>();
 
         if count_down == 0 {
+            println!(
+                "finished with vec_opt_flowers remains: {}",
+                vec_opt_flowers.len()
+            );
             break;
         }
     }

@@ -1,3 +1,5 @@
+#![allow(clippy::needless_return)]
+
 use flowync::Flower;
 
 fn main() {

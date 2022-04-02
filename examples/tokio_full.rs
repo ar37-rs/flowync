@@ -2,6 +2,8 @@
 // # Make sure to enable tokio "full" features (multithreaded support) like so:
 // tokio = { version = "1", features = ["full"] }
 
+// #![allow(clippy::needless_return)]
+
 use flowync::Flower;
 use std::{io::Error, time::Instant};
 
@@ -10,34 +12,37 @@ async fn main() {
     let instant: Instant = Instant::now();
     let flower: Flower<String, u32> = Flower::new(1);
     tokio::spawn({
-        let handle = flower.handle();
+        let this = flower.handle();
         // Activate
-        handle.activate();
+        this.activate();
         async move {
-            let id = handle.id();
+            let id = this.id();
             let result =
                 Ok::<String, Error>(format!("the flower with id: {} is flowing", id).into());
 
             match result {
                 Ok(value) => {
                     // Send current flower progress.
-                    handle.send_async(value).await;
+                    this.send_async(value).await;
                 }
                 Err(e) => {
                     // Return error immediately if something not right, for example:
-                    return handle.err(e.to_string());
+                    return this.err(e.to_string());
                 }
             }
 
             // Explicit Cancelation example:
             // Check if the current flower should be canceled
-            if handle.should_cancel() {
+            if this.should_cancel() {
                 let value = format!("canceling the flower with id: {}", id);
-                handle.send_async(value).await;
-                return handle.err(format!("the flower with id: {} canceled", id));
+                this.send_async(value).await;
+                return this.err(format!("the flower with id: {} canceled", id));
             }
 
-            return handle.ok(instant.elapsed().subsec_micros());
+            // Finishing
+            // either return this.ok(instant.elapsed().subsec_micros()); or
+            this.ok(instant.elapsed().subsec_micros());
+            // both are ok
         }
     });
 
@@ -64,7 +69,7 @@ async fn main() {
                 });
         }
 
-        // Cancel if need to
+        // // Cancel if need to
         // flower.cancel();
 
         if done {
