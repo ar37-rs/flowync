@@ -6,13 +6,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-type TestFlower = Flower<String, u32>;
+type TestVectoredFlower = Flower<String, u32>;
 
 fn main() {
     let instant: Instant = Instant::now();
     let mut vec_opt_flowers = Vec::new();
     for i in 0..5 {
-        let flower: TestFlower = Flower::new(i);
+        let flower: TestVectoredFlower = Flower::new(i);
         std::thread::spawn({
             let this = flower.handle();
             // Activate if need too, actually needless on this context because we use Option
@@ -66,19 +66,19 @@ fn main() {
             if let Some(flower) = opt_flower {
                 let id = flower.id();
 
-                // // Cancel if need to.
+                // Cancel if need to.
                 // if (id % 2 != 0) || (id == 0) {
                 //     flower.cancel();
                 // }
 
                 let mut done = false;
-                flower
-                    .try_recv(|channel| {
+                flower.then(
+                    |channel| {
                         if let Some(value) = channel {
                             println!("{}\n", value);
                         }
-                    })
-                    .on_complete(|result| {
+                    },
+                    |result| {
                         match result {
                             Ok(elapsed) => println!(
                                 "the flower with id: {} finished in: {:?} milliseconds\n",
@@ -87,7 +87,8 @@ fn main() {
                             Err(err_msg) => println!("{}", err_msg),
                         }
                         done = true;
-                    });
+                    },
+                );
 
                 if done {
                     // Set to None to free later
@@ -97,13 +98,13 @@ fn main() {
             }
         });
 
-        // Free completed flower
-        vec_opt_flowers = vec_opt_flowers
-            .into_iter()
-            .filter(|opt_flower| opt_flower.is_some())
-            .collect::<Vec<_>>();
-
         if count_down == 0 {
+            // Free completed flower
+            vec_opt_flowers = vec_opt_flowers
+                .into_iter()
+                .filter(|opt_flower| opt_flower.is_some())
+                .collect::<Vec<_>>();
+
             println!(
                 "finished with vec_opt_flowers remains: {}",
                 vec_opt_flowers.len()

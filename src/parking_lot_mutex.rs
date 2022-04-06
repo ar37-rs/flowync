@@ -12,8 +12,8 @@ use std::{sync::Arc, thread};
 
 struct FlowerState<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     activated: AtomicBool,
     result_ready: AtomicBool,
@@ -25,8 +25,8 @@ where
 
 impl<SOME, OK> Debug for FlowerState<SOME, OK>
 where
-    SOME: Debug + Clone + Send + Sync + 'static,
-    OK: Debug + Clone + Send + Sync + 'static,
+    SOME: Debug + Send,
+    OK: Debug + Send,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("FlowerState")
@@ -42,8 +42,8 @@ where
 
 impl<SOME, OK> Drop for FlowerState<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     fn drop(&mut self) {}
 }
@@ -52,17 +52,19 @@ where
 ///
 /// Where:
 ///
-/// SOME: type of sender (channel) value
+/// SOME = type of sender (channel) value
 ///
-/// OK: type of Ok value of the Result (Result<'OK', String>, and Err value always return String)
+/// OK = type of Ok value of the Result (Result<'OK', String>, and Err value always return String)
 ///
 /// # Quick Example:
 ///
 ///```
 ///use flowync::Flower;
 ///
+///type TestFlower = Flower<u32, String>;
+///
 ///fn _main() {
-///    let flower = Flower::<i32, String>::new(1);
+///    let flower: TestFlower = Flower::new(1);
 ///    std::thread::spawn({
 ///        let handle = flower.handle();
 ///        // Activate
@@ -91,15 +93,24 @@ where
 ///        // and will deactivate itself if the result value successfully received.
 ///        // Note: this fn is non-blocking (won't block the current thread).
 ///        if flower.is_active() {
-///            flower.try_recv(|channel| {
+///            // another logic goes here...
+///            // e.g:
+///            // notify_loading_fn();
+///
+///            flower.then(|channel| {
+///                // poll channel
 ///                if let Some(value) = channel {
 ///                    println!("{}", value);
 ///                }
-///            }).on_complete(|result| {
+///            },
+///            |result| {
+///                // match result
 ///                match result {
 ///                    Ok(value) => println!("{}", value),
 ///                    Err(err_msg) => println!("{}", err_msg),
 ///                }
+///
+///                // exit if completed
 ///                exit = true;
 ///            });
 ///        }
@@ -112,8 +123,8 @@ where
 /// ```
 pub struct Flower<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     state: Arc<FlowerState<SOME, OK>>,
     awaiting: Arc<(Mutex<Option<Waker>>, AtomicBool)>,
@@ -122,8 +133,8 @@ where
 
 impl<SOME, OK> Flower<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     pub fn new(id: usize) -> Self {
         Self {
@@ -182,10 +193,18 @@ where
         self.state.channel_present.load(Ordering::Relaxed)
     }
 
-    /// Try receive the flower channel value
-    pub fn try_recv(&self, f: impl FnOnce(Option<SOME>)) -> &Self {
+    /// Process the flower
+    ///
+    /// Where:
+    ///
+    /// c =  channel,  r = result
+    ///
+    /// SOME = type of sender (channel) value
+    ///
+    /// OK = type of Ok value of the Result (Result<'OK', String>, and Err value always return String)
+    pub fn then(&self, c: impl FnOnce(Option<SOME>), r: impl FnOnce(Result<OK, String>)) {
         if self.state.channel_present.load(Ordering::Relaxed) {
-            let result = self.state.mtx.lock().0.take();
+            let value = self.state.mtx.lock().0.take();
             self.state.channel_present.store(false, Ordering::Relaxed);
             if self.awaiting.1.load(Ordering::Relaxed) {
                 let mut mg_opt_waker = self.awaiting.0.lock();
@@ -194,35 +213,30 @@ where
                     waker.wake();
                 }
             } else {
-                self.state.cvar.notify_one();
+                self.state.cvar.notify_all();
             }
-            f(result)
-        } else {
-            f(None)
-        }
-        self
-    }
-
-    /// Process the flower result
-    pub fn on_complete(&self, f: impl FnOnce(Result<OK, String>)) {
-        if self.state.result_ready.load(Ordering::Relaxed) {
-            let mut result = self.state.mtx.lock();
-            let (_, ok, error) = &mut *result;
+            c(value);
+        } else if self.state.result_ready.load(Ordering::Relaxed) {
+            let mut result_value = self.state.mtx.lock();
+            let (_, ok, error) = &mut *result_value;
             self.state.result_ready.store(false, Ordering::Relaxed);
             self.state.activated.store(false, Ordering::Relaxed);
+
             if let Some(value) = ok.take() {
-                f(Ok(value));
+                r(Ok(value));
             } else if let Some(value) = error.take() {
-                f(Err(value));
+                r(Err(value));
             }
+        } else {
+            c(None);
         }
     }
 }
 
 impl<SOME, OK> Debug for Flower<SOME, OK>
 where
-    SOME: Debug + Clone + Send + Sync + 'static,
-    OK: Debug + Clone + Send + Sync + 'static,
+    SOME: Debug + Send,
+    OK: Debug + Send,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Flower")
@@ -235,8 +249,8 @@ where
 
 impl<SOME, OK> Clone for Flower<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     fn clone(&self) -> Self {
         Self {
@@ -249,8 +263,8 @@ where
 
 impl<SOME, OK> Drop for Flower<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     fn drop(&mut self) {
         if thread::panicking() {
@@ -262,8 +276,8 @@ where
 /// A handle for the Flower
 pub struct FlowerHandle<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     state: Arc<FlowerState<SOME, OK>>,
     awaiting: Arc<(Mutex<Option<Waker>>, AtomicBool)>,
@@ -272,8 +286,8 @@ where
 
 impl<SOME, OK> FlowerHandle<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     /// Get ID of the flower.
     pub fn id(&self) -> usize {
@@ -353,8 +367,8 @@ impl Future for AsyncSuspender {
 
 impl<SOME, OK> Clone for FlowerHandle<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     fn clone(&self) -> Self {
         Self {
@@ -367,8 +381,8 @@ where
 
 impl<SOME, OK> Drop for FlowerHandle<SOME, OK>
 where
-    SOME: Clone + Send + Sync + 'static,
-    OK: Clone + Send + Sync + 'static,
+    SOME: Send,
+    OK: Send,
 {
     fn drop(&mut self) {
         if thread::panicking() && !self.state.result_ready.load(Ordering::Relaxed) {
@@ -382,8 +396,8 @@ where
 
 impl<SOME, OK> Debug for FlowerHandle<SOME, OK>
 where
-    SOME: Debug + Clone + Send + Sync + 'static,
-    OK: Debug + Clone + Send + Sync + 'static,
+    SOME: Debug + Send,
+    OK: Debug + Send,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("FlowerHandle")

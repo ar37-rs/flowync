@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.0] - 2022-4-6
+- Remove needless traits: Sync + 'static
+- Breaking changes:
+    * remove fn try_recv and fn on_complete to avoid potential UB in a particular case.
+
 ## [2.0.x] - 2022-4-1
 - Breaking change:
     * remove Leaper

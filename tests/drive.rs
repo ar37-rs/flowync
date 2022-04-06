@@ -22,15 +22,15 @@ fn drive() {
 
     loop {
         if flower.is_active() {
-            flower
-                .try_recv(|channel| {
+            flower.then(
+                |channel| {
                     if let Some(value) = channel {
                         received_last_value = value;
                         sum += value;
                         println!("{}", value);
                     }
-                })
-                .on_complete(|result| {
+                },
+                |result| {
                     match result {
                         Ok(value) => {
                             assert_eq!("Ok", &value);
@@ -39,7 +39,8 @@ fn drive() {
                     }
 
                     exit = true;
-                });
+                },
+            );
         }
 
         if exit {

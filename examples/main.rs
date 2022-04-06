@@ -2,8 +2,10 @@
 
 use flowync::Flower;
 
+type TestFlower = Flower<u32, String>;
+
 fn main() {
-    let flower = Flower::<i32, String>::new(1);
+    let flower: TestFlower = Flower::new(1);
     std::thread::spawn({
         let handle = flower.handle();
         // Activate
@@ -32,19 +34,26 @@ fn main() {
         // and will deactivate itself if the result value successfully received.
         // Note: this fn is non-blocking (won't block the current thread).
         if flower.is_active() {
-            flower
-                .try_recv(|channel| {
-                    if let Some(value) = channel {
-                        println!("{}", value);
-                    }
-                })
-                .on_complete(|result| {
-                    match result {
-                        Ok(value) => println!("{}", value),
-                        Err(err_msg) => println!("{}", err_msg),
-                    }
-                    exit = true;
-                });
+            // another logic goes here...
+            // e.g:
+            // notify_loading_fn();
+
+            flower.then(|channel| {
+                // poll channel
+                if let Some(value) = channel {
+                    println!("{}", value);
+                }
+            },
+            |result| {
+                // match result
+                match result {
+                    Ok(value) => println!("{}", value),
+                    Err(err_msg) => println!("{}", err_msg),
+                }
+
+                // exit if completed
+                exit = true;
+            });
         }
 
         if exit {

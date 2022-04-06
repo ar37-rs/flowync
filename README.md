@@ -9,8 +9,10 @@
 ```rust
 use flowync::Flower;
 
+type TestFlower = Flower<u32, String>;
+
 fn main() {
-    let flower = Flower::<i32, String>::new(1);
+    let flower: TestFlower = Flower::new(1);
     std::thread::spawn({
         let handle = flower.handle();
         // Activate
@@ -20,8 +22,8 @@ fn main() {
                 // // Send current value through channel, will block the spawned thread
                 // until the option value successfully being polled in the main thread.
                 handle.send(i);
-                // or handle.send_async(i).await; can be used from any multithreaded async runtime, 
-                
+                // or handle.send_async(i).await; can be used from any multithreaded async runtime,
+
                 // // Return error if the job is failure, for example:
                 // if i >= 3 {
                 //    return handle.err("Err");
@@ -39,15 +41,24 @@ fn main() {
         // and will deactivate itself if the result value successfully received.
         // Note: this fn is non-blocking (won't block the current thread).
         if flower.is_active() {
-            flower.try_recv(|channel| {
+            // another logic goes here...
+            // e.g:
+            // notify_loading_fn();
+
+            flower.then(|channel| {
+                // poll channel
                 if let Some(value) = channel {
                     println!("{}", value);
                 }
-            }).on_complete(|result| {
+            },
+            |result| {
+                // match result
                 match result {
                     Ok(value) => println!("{}", value),
                     Err(err_msg) => println!("{}", err_msg),
                 }
+
+                // exit if completed
                 exit = true;
             });
         }

@@ -7,10 +7,12 @@
 use flowync::Flower;
 use std::{io::Error, time::Instant};
 
+type TestTokioFlower = Flower<String, u32>;
+
 #[tokio::main]
 async fn main() {
     let instant: Instant = Instant::now();
-    let flower: Flower<String, u32> = Flower::new(1);
+    let flower: TestTokioFlower = Flower::new(1);
     tokio::spawn({
         let this = flower.handle();
         // Activate
@@ -50,13 +52,13 @@ async fn main() {
 
     loop {
         if flower.is_active() {
-            flower
-                .try_recv(|channel| {
+            flower.then(
+                |channel| {
                     if let Some(value) = channel {
                         println!("{}\n", value);
                     }
-                })
-                .on_complete(|result| {
+                },
+                |result| {
                     match result {
                         Ok(elapsed) => println!(
                             "the flower with id: {} finished in: {:?} microseconds \n",
@@ -66,7 +68,8 @@ async fn main() {
                         Err(err_msg) => println!("{}", err_msg),
                     }
                     done = true;
-                });
+                },
+            );
         }
 
         // // Cancel if need to
