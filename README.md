@@ -7,6 +7,7 @@
 ## Quick Example
 
 ```rust
+
 use flowync::Flower;
 
 type TestFlower = Flower<u32, String>;
@@ -45,22 +46,24 @@ fn main() {
             // e.g:
             // notify_loading_fn();
 
-            flower.then(|channel| {
-                // poll channel
-                if let Some(value) = channel {
-                    println!("{}", value);
-                }
-            },
-            |result| {
-                // match result
-                match result {
-                    Ok(value) => println!("{}", value),
-                    Err(err_msg) => println!("{}", err_msg),
-                }
+            flower.then(
+                |channel| {
+                    // poll channel
+                    if let Some(value) = channel {
+                        println!("{}", value);
+                    }
+                },
+                |result| {
+                    // match result
+                    match result {
+                        Ok(value) => println!("{}", value),
+                        Err(err_msg) => println!("{}", err_msg),
+                    }
 
-                // exit if completed
-                exit = true;
-            });
+                    // exit if completed
+                    exit = true;
+                },
+            );
         }
 
         if exit {
