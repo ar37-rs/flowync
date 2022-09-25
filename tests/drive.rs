@@ -1,5 +1,3 @@
-// #![allow(clippy::needless_return)]
-
 use flowync::Flower;
 
 #[test]
@@ -12,25 +10,23 @@ fn drive() {
             for i in 1..20 {
                 handle.send(i);
             }
-            handle.ok("Ok".to_string());
+            handle.error("Ok".to_string());
         }
     });
 
     let mut exit = false;
-    let mut sum = 0;
     let mut received_last_value = 0;
 
     loop {
         if flower.is_active() {
-            flower.then(
-                |channel| {
+            flower
+                .extract(|channel| {
                     if let Some(value) = channel {
                         received_last_value = value;
-                        sum += value;
                         println!("{}", value);
                     }
-                },
-                |result| {
+                })
+                .finalize(|result| {
                     match result {
                         Ok(value) => {
                             assert_eq!("Ok", &value);
@@ -39,8 +35,7 @@ fn drive() {
                     }
 
                     exit = true;
-                },
-            );
+                });
         }
 
         if exit {
@@ -49,5 +44,4 @@ fn drive() {
     }
 
     assert_eq!(received_last_value, 19);
-    assert_eq!(sum, 190);
 }

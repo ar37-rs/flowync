@@ -1,8 +1,8 @@
 [package]
 name = "flowync"
-version = "3.0.0"
+version = "4.0.0"
 authors = ["Ar37-rs <adyaro37@gmail.com>"]
-edition = "2018"
+edition = "2021"
 description = "A simple utility for multithreading a/synchronization"
 documentation = "https://docs.rs/flowync"
 readme = "README.md"
@@ -10,14 +10,6 @@ keywords = ["async", "sync", "std", "multi-thread", "non-blocking"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Ar37-rs/flowync"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[features]
-default = []
-parking-lot = ["parking_lot"]
-
-[dependencies.parking_lot]
-version = "0.12"
-optional = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

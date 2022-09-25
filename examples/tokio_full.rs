@@ -29,7 +29,7 @@ async fn main() {
                 }
                 Err(e) => {
                     // Return error immediately if something not right, for example:
-                    return this.err(e.to_string());
+                    return this.error(e);
                 }
             }
 
@@ -38,12 +38,12 @@ async fn main() {
             if this.should_cancel() {
                 let value = format!("canceling the flower with id: {}", id);
                 this.send_async(value).await;
-                return this.err(format!("the flower with id: {} canceled", id));
+                return this.error(format!("the flower with id: {} canceled", id));
             }
 
-            // Finishing
-            // either return this.ok(instant.elapsed().subsec_micros()); or
-            this.ok(instant.elapsed().subsec_micros());
+            // Finalizing
+            // either `return this.success(instant.elapsed().subsec_micros());` or
+            this.success(instant.elapsed().subsec_micros());
             // both are ok
         }
     });
@@ -52,13 +52,14 @@ async fn main() {
 
     loop {
         if flower.is_active() {
-            flower.then(
-                |channel| {
+            flower
+                .extract(|channel| {
+                    // Poll channel
                     if let Some(value) = channel {
-                        println!("{}\n", value);
+                        println!("{}", value);
                     }
-                },
-                |result| {
+                })
+                .finalize(|result| {
                     match result {
                         Ok(elapsed) => println!(
                             "the flower with id: {} finished in: {:?} microseconds \n",
@@ -68,11 +69,10 @@ async fn main() {
                         Err(err_msg) => println!("{}", err_msg),
                     }
                     done = true;
-                },
-            );
+                });
         }
 
-        // // Cancel if need to
+        // Cancel if need to
         // flower.cancel();
 
         if done {

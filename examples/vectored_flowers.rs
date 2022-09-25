@@ -20,9 +20,9 @@ fn main() {
             move || {
                 let id = this.id();
 
-                // // Panic if need to.
+                // Panic if need to.
                 // if id == 3 {
-                //    std::panic::panic_any("loudness");
+                //     std::panic::panic_any("loudness");
                 // }
 
                 let millis = id + 1;
@@ -37,7 +37,7 @@ fn main() {
                     }
                     Err(e) => {
                         // Return error immediately if something not right, for example:
-                        return this.err(e.to_string());
+                        return this.error(e);
                     }
                 }
 
@@ -46,12 +46,12 @@ fn main() {
                 if this.should_cancel() {
                     let value = format!("canceling the flower with id: {}", id);
                     this.send(value);
-                    return this.err(format!("the flower with id: {} canceled", id));
+                    return this.error(format!("the flower with id: {} canceled", id));
                 }
 
                 // Finishing
                 // either return this.ok(instant.elapsed().subsec_millis()); or
-                this.ok(instant.elapsed().subsec_millis());
+                this.success(instant.elapsed().subsec_millis());
                 // both are ok
             }
         });
@@ -72,13 +72,14 @@ fn main() {
                 // }
 
                 let mut done = false;
-                flower.then(
-                    |channel| {
+                flower
+                    .extract(|channel| {
+                        // Poll channel
                         if let Some(value) = channel {
-                            println!("{}\n", value);
+                            println!("{}", value);
                         }
-                    },
-                    |result| {
+                    })
+                    .finalize(|result| {
                         match result {
                             Ok(elapsed) => println!(
                                 "the flower with id: {} finished in: {:?} milliseconds\n",
@@ -87,8 +88,7 @@ fn main() {
                             Err(err_msg) => println!("{}", err_msg),
                         }
                         done = true;
-                    },
-                );
+                    });
 
                 if done {
                     // Set to None to free later

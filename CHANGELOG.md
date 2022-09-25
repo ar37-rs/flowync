@@ -1,4 +1,10 @@
 # Changelog
+## [4.0.0] - 2022-9-25
+- Refactor
+   * `ok` fn changed to `success` fn, and `err` fn changed to `error` fn for more convenience.
+   * Added `result` and `extract` fn
+   * Remove `then` fn
+   * Remove parking_lot as dependency.
 
 ## [3.0.0] - 2022-4-6
 - Remove needless traits: Sync + 'static

@@ -19,12 +19,12 @@ fn main() {
             ));
             match result {
                 Ok(value) => {
-                    // And return ok if the job successfully completed.
-                    return handle.ok(value);
+                    // And return if the job successfully completed.
+                    return handle.success(value);
                 }
                 Err(e) => {
                     // Return error immediately if something not right, for example:
-                    return handle.err(e.to_string());
+                    return handle.error(e);
                 }
             }
         }
@@ -33,20 +33,16 @@ fn main() {
     let mut exit = false;
 
     loop {
-        // Instead of polling the mutex over and over, check if the flower is_active()
+        // Check if the flower is_active()
         // and will deactivate itself if the result value successfully received.
-        // Note: this fn is non-blocking (won't block the current thread).
         if flower.is_active() {
-            flower.then(
-                |_channel| (),
-                |result| {
-                    match result {
-                        Ok(value) => println!("{}", value),
-                        Err(err_msg) => println!("{}", err_msg),
-                    }
-                    exit = true;
-                },
-            );
+            flower.result(|result| {
+                match result {
+                    Ok(value) => println!("{}", value),
+                    Err(err_msg) => println!("{}", err_msg),
+                }
+                exit = true;
+            });
         }
 
         if exit {
