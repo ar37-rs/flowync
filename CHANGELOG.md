@@ -1,4 +1,7 @@
 # Changelog
+## [4.0.2] - 2022-9-26
+- Fix unexpected deadlock on `result` fn.
+
 ## [4.0.1] - 2022-9-26
 - Small Optimization
    * Added `IntoResult` trait to convert `Option<T>` into `Result<T, E>`

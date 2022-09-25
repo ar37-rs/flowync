@@ -227,14 +227,11 @@ where
     ///
     /// **Warning!** don't use this fn if channel value is important, use `extract fn` and then use `finalize fn` instead.
     pub fn result(&self, f: impl FnOnce(Result<R, String>)) {
+        if self.state.channel_present.load(Ordering::Relaxed) {
+            let _ = self.state.mtx.lock().unwrap().0.take();
+            self.state.cvar.notify_all();
+        }
         if self.state.result_ready.load(Ordering::Relaxed) {
-            {
-                if self.state.channel_present.load(Ordering::Relaxed) {
-                    let _ = self.state.mtx.lock().unwrap().0.take();
-                    self.state.cvar.notify_all();
-                }
-            }
-
             let _self = self;
             let catch = move || {
                 let mut result_value = _self.state.mtx.lock().unwrap();
