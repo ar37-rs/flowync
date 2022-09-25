@@ -4,6 +4,7 @@
 ![minimum rustc 1.61.0](https://img.shields.io/badge/rustc-1.61.0-blue.svg)
 [![Flowync documentation](https://docs.rs/flowync/badge.svg)](https://docs.rs/flowync)
 [![CI](https://github.com/Ar37-rs/flowync/actions/workflows/ci.yml/badge.svg)](https://github.com/Ar37-rs/flowync/actions/workflows/ci.yml)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
 ## Quick Example
 
@@ -30,7 +31,7 @@ fn main() {
                 // }
             }
             // And return if the job successfully completed.
-            return handle.success("Ok".to_string());
+            handle.success("Ok".to_string());
         }
     });
 

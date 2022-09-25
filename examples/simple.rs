@@ -1,5 +1,3 @@
-#![allow(clippy::needless_return)]
-
 use flowync::Flower;
 use std::io::Error;
 
@@ -20,11 +18,11 @@ fn main() {
             match result {
                 Ok(value) => {
                     // And return if the job successfully completed.
-                    return handle.success(value);
+                    handle.success(value);
                 }
                 Err(e) => {
                     // Return error immediately if something not right, for example:
-                    return handle.error(e);
+                    handle.error(e);
                 }
             }
         }

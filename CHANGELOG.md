@@ -1,4 +1,8 @@
 # Changelog
+## [4.0.1] - 2022-9-26
+- Small Optimization
+   * Added `IntoResult` trait to convert `Option<T>` into `Result<T, E>`
+
 ## [4.0.0] - 2022-9-25
 - Refactor
    * `ok` fn changed to `success` fn, and `err` fn changed to `error` fn for more convenience.

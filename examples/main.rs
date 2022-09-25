@@ -21,7 +21,7 @@ fn main() {
                 // }
             }
             // And return if the job successfully completed.
-            return handle.success("Ok".to_string());
+            handle.success("Ok".to_string());
         }
     });
 

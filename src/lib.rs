@@ -7,7 +7,10 @@ use core::{
     sync::atomic::{AtomicBool, Ordering},
     task::{Context, Poll, Waker},
 };
-use std::sync::{Condvar, Mutex};
+use std::{
+    error::Error,
+    sync::{Condvar, Mutex},
+};
 use std::{sync::Arc, thread};
 
 struct State<S, R>
@@ -81,7 +84,7 @@ where
 ///                // }
 ///            }
 ///            // And return if the job successfully completed.
-///            return handle.success("Ok".to_string());
+///            handle.success("Ok".to_string());
 ///        }
 ///    });
 ///
@@ -140,14 +143,18 @@ where
     pub fn finalize(self, f: impl FnOnce(Result<R, String>)) {
         let _self = self.0;
         if _self.state.result_ready.load(Ordering::Relaxed) {
-            let mut result_value = _self.state.mtx.lock().unwrap();
-            let (_, ok, error) = &mut (*result_value);
-            _self.state.result_ready.store(false, Ordering::Relaxed);
-            _self.state.activated.store(false, Ordering::Relaxed);
+            let catch = move || {
+                let mut result_value = _self.state.mtx.lock().unwrap();
+                let (_, ok, error) = &mut *result_value;
+                _self.state.result_ready.store(false, Ordering::Relaxed);
+                _self.state.activated.store(false, Ordering::Relaxed);
+                (ok.take(), error.take())
+            };
 
-            if let Some(value) = ok.take() {
+            let (ok, err) = catch();
+            if let Some(value) = ok {
                 f(Ok(value));
-            } else if let Some(value) = error.take() {
+            } else if let Some(value) = err {
                 f(Err(value));
             }
         }
@@ -220,19 +227,27 @@ where
     ///
     /// **Warning!** don't use this fn if channel value is important, use `extract fn` and then use `finalize fn` instead.
     pub fn result(&self, f: impl FnOnce(Result<R, String>)) {
-        if self.state.channel_present.load(Ordering::Relaxed) {
-            let _ = self.state.mtx.lock().unwrap().0.take();
-            self.state.cvar.notify_all();
-        }
-
         if self.state.result_ready.load(Ordering::Relaxed) {
-            let mut result_value = self.state.mtx.lock().unwrap();
-            let (_, ok, error) = &mut *result_value;
-            self.state.result_ready.store(false, Ordering::Relaxed);
-            self.state.activated.store(false, Ordering::Relaxed);
-            if let Some(value) = ok.take() {
+            {
+                if self.state.channel_present.load(Ordering::Relaxed) {
+                    let _ = self.state.mtx.lock().unwrap().0.take();
+                    self.state.cvar.notify_all();
+                }
+            }
+
+            let _self = self;
+            let catch = move || {
+                let mut result_value = _self.state.mtx.lock().unwrap();
+                let (_, ok, error) = &mut *result_value;
+                _self.state.result_ready.store(false, Ordering::Relaxed);
+                _self.state.activated.store(false, Ordering::Relaxed);
+                (ok.take(), error.take())
+            };
+
+            let (ok, err) = catch();
+            if let Some(value) = ok {
                 f(Ok(value));
-            } else if let Some(value) = error.take() {
+            } else if let Some(value) = err {
                 f(Err(value));
             }
         }
@@ -241,17 +256,21 @@ where
     /// Try extract channel value of the flower if available, and then `finalize` (must_use)
     pub fn extract(&self, f: impl FnOnce(Option<S>)) -> Extracted<'_, S, R> {
         if self.state.channel_present.load(Ordering::Relaxed) {
-            let value = self.state.mtx.lock().unwrap().0.take();
-            self.state.channel_present.store(false, Ordering::Relaxed);
-            if self.awaiting.1.load(Ordering::Relaxed) {
-                let mut mg_opt_waker = self.awaiting.0.lock().unwrap();
-                self.awaiting.1.store(false, Ordering::Relaxed);
-                if let Some(waker) = mg_opt_waker.take() {
-                    waker.wake();
+            let catch = move || {
+                let value = self.state.mtx.lock().unwrap().0.take();
+                self.state.channel_present.store(false, Ordering::Relaxed);
+                if self.awaiting.1.load(Ordering::Relaxed) {
+                    let mut mg_opt_waker = self.awaiting.0.lock().unwrap();
+                    self.awaiting.1.store(false, Ordering::Relaxed);
+                    if let Some(waker) = mg_opt_waker.take() {
+                        waker.wake();
+                    }
+                } else {
+                    self.state.cvar.notify_all();
                 }
-            } else {
-                self.state.cvar.notify_all();
-            }
+                value
+            };
+            let value = catch();
             f(value)
         } else {
             f(None)
@@ -340,17 +359,21 @@ where
     /// Send current progress value
     pub fn send(&self, s: S) {
         let mut mtx = self.state.mtx.lock().unwrap();
-        mtx.0 = Some(s);
-        self.state.channel_present.store(true, Ordering::Relaxed);
-        self.awaiting.1.store(false, Ordering::Relaxed);
-        let _e = self.state.cvar.wait(mtx);
+        {
+            mtx.0 = Some(s);
+            self.state.channel_present.store(true, Ordering::Relaxed);
+            self.awaiting.1.store(false, Ordering::Relaxed);
+        }
+        let _ = self.state.cvar.wait(mtx);
     }
 
     /// Send current progress value asynchronously.
     pub async fn send_async(&self, s: S) {
-        self.state.mtx.lock().unwrap().0 = Some(s);
-        self.awaiting.1.store(true, Ordering::Relaxed);
-        self.state.channel_present.store(true, Ordering::Relaxed);
+        {
+            self.state.mtx.lock().unwrap().0 = Some(s);
+            self.awaiting.1.store(true, Ordering::Relaxed);
+            self.state.channel_present.store(true, Ordering::Relaxed);
+        }
         AsyncSuspender {
             awaiting: self.awaiting.clone(),
         }
@@ -359,19 +382,23 @@ where
 
     /// Set the Ok value of the result.
     pub fn success(&self, r: R) {
-        let mut result = self.state.mtx.lock().unwrap();
-        let (_, ok, error) = &mut *result;
-        *ok = Some(r);
-        *error = None;
+        {
+            let mut result = self.state.mtx.lock().unwrap();
+            let (_, ok, error) = &mut *result;
+            *ok = Some(r);
+            *error = None;
+        }
         self.state.result_ready.store(true, Ordering::Relaxed);
     }
 
     /// Set the Err value of the result.
     pub fn error(&self, e: impl ToString) {
-        let mut result = self.state.mtx.lock().unwrap();
-        let (_, ok, error) = &mut *result;
-        *error = Some(e.to_string());
-        *ok = None;
+        {
+            let mut result = self.state.mtx.lock().unwrap();
+            let (_, ok, error) = &mut *result;
+            *error = Some(e.to_string());
+            *ok = None;
+        }
         self.state.result_ready.store(true, Ordering::Relaxed);
     }
 }
@@ -433,5 +460,23 @@ where
             .field("awaiting", &self.awaiting)
             .field("id", &self.id)
             .finish()
+    }
+}
+
+pub type OIError = Box<dyn Error>;
+
+/// A trait to convert option into `Result`.
+pub trait IntoResult<T> {
+    /// Convert `Option` into `Result`
+    fn catch(self, error_msg: impl ToString) -> Result<T, Box<dyn Error>>;
+}
+
+impl<T> IntoResult<T> for Option<T> {
+    fn catch(self, error_msg: impl ToString) -> Result<T, Box<dyn Error>> {
+        let message: String = error_msg.to_string();
+        match self {
+            Some(val) => Ok(val),
+            None => Err(message.into()),
+        }
     }
 }
