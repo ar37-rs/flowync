@@ -1,4 +1,10 @@
 # Changelog
+## [4.6.0] - 2022-9-26
+- Added 'set_result` and `try_result` fn for more simpler error handling.
+- Added `IOError` type alias
+- Update examples
+- Imrove doc
+
 ## [4.0.2] - 2022-9-26
 - Fix unexpected deadlock on `result` fn.
 

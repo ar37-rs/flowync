@@ -55,72 +55,74 @@ where
 ///
 /// Where:
 ///
-/// S = type of sender (channel) value
+/// `S` = type of sender (`channel`) value
 ///
-/// R = type of Ok value of the Result (Result<'R', String>, and Err value always return String)
+/// `R` = type of `Ok` value of the `Result` (`Result<R, String>`, and Err value always return `String`)
 ///
 /// # Quick Example:
 ///
 ///```
-///use flowync::Flower;
-///type TestFlower = Flower<u32, String>;
+/// use flowync::{Flower, IOError};
+/// type TestFlower = Flower<u32, String>;
 ///
-///fn _main() {
-///    let flower: TestFlower = Flower::new(1);
-///    std::thread::spawn({
-///        let handle = flower.handle();
-///        // Activate
-///        handle.activate();
-///        move || {
-///            for i in 0..10 {
-///                // Send current value through channel, will block the spawned thread
-///                // until the option value successfully being polled in the main thread.
-///                handle.send(i);
-///                // or handle.send_async(i).await; can be used from any multithreaded async runtime,
-///                
-///                // Return error if the job is failure, for example:
-///                // if i >= 3 {
-///                //    return handle.error("Err");
-///                // }
-///            }
-///            // And return if the job successfully completed.
-///            handle.success("Ok".to_string());
-///        }
-///    });
+/// fn fetch_things(id: usize) -> Result<String, IOError> {
+///     let result =
+///         Ok::<String, IOError>(format!("the flower with id: {} successfully completed fetching.", id));
+///     let success = result?;
+///     Ok(success)
+/// }
 ///
-///    let mut exit = false;
+/// fn main() {
+///     let flower: TestFlower = Flower::new(1);
+///     std::thread::spawn({
+///         let handle = flower.handle();
+///         // Activate
+///         handle.activate();
+///         move || {
+///             for i in 0..10 {
+///                 // Send current value through channel, will block the spawned thread
+///                 // until the option value successfully being polled in the main thread.
+///                 handle.send(i);
+///                 // or handle.send_async(i).await; can be used from any multithreaded async runtime,
+///             }
+///             let result = fetch_things(handle.id());
+///             // Set result and then extract later.
+///             handle.set_result(result)
+///         }
+///     });
 ///
-///    loop {
-///        // Check if the flower is_active()
-///        // and will deactivate itself if the result value successfully received.
-///        if flower.is_active() {
-///            // Another logic goes here...
-///            // e.g:
-///            // notify_loading_fn();
+///     let mut exit = false;
 ///
-///            flower
-///                .extract(|channel| {
+///     loop {
+///         // Check if the flower is_active()
+///         // and will deactivate itself if the result value successfully received.
+///         if flower.is_active() {
+///             // another logic goes here...
+///             // e.g:
+///             // notify_loading_fn();
+///
+///             flower
+///                 .extract(|channel| {
 ///                     // Poll channel
 ///                     if let Some(value) = channel {
 ///                         println!("{}", value);
 ///                     }
 ///                 })
-///                .finalize(|result| {
-///                    match result {
-///                        Ok(value) => println!("{}", value),
-///                        Err(err_msg) => println!("{}", err_msg),
-///                    }
+///                 .finalize(|result| {
+///                     match result {
+///                         Ok(value) => println!("{}", value),
+///                         Err(err_msg) => println!("{}", err_msg),
+///                     }
+///                     // Exit if finalized
+///                     exit = true;
+///                 });
+///         }
 ///
-///                    // Exit if completed
-///                    exit = true;
-///                });
-///        }
-///
-///        if exit {
-///            break;
-///        }
-///    }
-///}
+///         if exit {
+///             break;
+///         }
+///     }
+/// }
 /// ```
 pub struct Flower<S, R>
 where
@@ -223,10 +225,15 @@ where
         self.state.channel_present.load(Ordering::Relaxed)
     }
 
-    /// Get the result of the flower and ignore channel value (if any).
+    #[deprecated = "result is highly deprecated, use `try_result` fn is instead"]
+    pub fn result(&self, f: impl FnOnce(Result<R, String>)) {
+        self.try_result(f);
+    }
+
+    /// Try get the result of the flower and ignore channel value (if any).
     ///
     /// **Warning!** don't use this fn if channel value is important, use `extract fn` and then use `finalize fn` instead.
-    pub fn result(&self, f: impl FnOnce(Result<R, String>)) {
+    pub fn try_result(&self, f: impl FnOnce(Result<R, String>)) {
         if self.state.channel_present.load(Ordering::Relaxed) {
             let _ = self.state.mtx.lock().unwrap().0.take();
             self.state.cvar.notify_all();
@@ -377,6 +384,14 @@ where
         .await
     }
 
+    /// Set result value
+    pub fn set_result(&self, r: Result<R, Box<dyn Error>>) {
+        match r {
+            Ok(val) => self.success(val),
+            Err(e) => self.error(e),
+        }
+    }
+
     /// Set the Ok value of the result.
     pub fn success(&self, r: R) {
         {
@@ -461,10 +476,12 @@ where
 }
 
 pub type OIError = Box<dyn Error>;
+// Alternative alias to avoid conflict with other crate type
+pub type IOError = OIError;
 
-/// A trait to convert option into `Result`.
+/// A converter to convert `Option<T>` into `Result<T, E>` using `catch` fn.
 pub trait IntoResult<T> {
-    /// Convert `Option` into `Result`
+    /// Convert `Option<T>` into `Result<T, E>`
     fn catch(self, error_msg: impl ToString) -> Result<T, Box<dyn Error>>;
 }
 

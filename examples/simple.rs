@@ -1,7 +1,12 @@
-use flowync::Flower;
-use std::io::Error;
-
+use flowync::{Flower, IOError};
 type TestSimpleFlower = Flower<(), String>;
+
+fn fetch_things(id: usize) -> Result<String, IOError> {
+    let result =
+        Ok::<String, IOError>(format!("the flower with id: {} successfully completed", id));
+    let success = result?;
+    Ok(success)
+}
 
 fn main() {
     let flower: TestSimpleFlower = Flower::new(1);
@@ -11,20 +16,9 @@ fn main() {
         handle.activate();
         move || {
             let id = handle.id();
-            let result = Ok::<String, Error>(format!(
-                "thse flower with id: {} successfully completed",
-                id
-            ));
-            match result {
-                Ok(value) => {
-                    // And return if the job successfully completed.
-                    handle.success(value);
-                }
-                Err(e) => {
-                    // Return error immediately if something not right, for example:
-                    handle.error(e);
-                }
-            }
+            let result = fetch_things(id);
+            // Set result and then try_result later.
+            handle.set_result(result)
         }
     });
 
@@ -34,7 +28,7 @@ fn main() {
         // Check if the flower is_active()
         // and will deactivate itself if the result value successfully received.
         if flower.is_active() {
-            flower.result(|result| {
+            flower.try_result(|result| {
                 match result {
                     Ok(value) => println!("{}", value),
                     Err(err_msg) => println!("{}", err_msg),

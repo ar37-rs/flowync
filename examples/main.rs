@@ -1,6 +1,14 @@
-#![allow(clippy::needless_return)]
-use flowync::Flower;
+use flowync::{Flower, IOError};
 type TestFlower = Flower<u32, String>;
+
+fn fetch_things(id: usize) -> Result<String, IOError> {
+    let result = Ok::<String, IOError>(format!(
+        "the flower with id: {} successfully completed fetching.",
+        id
+    ));
+    let success = result?;
+    Ok(success)
+}
 
 fn main() {
     let flower: TestFlower = Flower::new(1);
@@ -14,14 +22,10 @@ fn main() {
                 // until the option value successfully being polled in the main thread.
                 handle.send(i);
                 // or handle.send_async(i).await; can be used from any multithreaded async runtime,
-
-                // Return error if the job is failure, for example:
-                // if i >= 3 {
-                //    return handle.error("Err");
-                // }
             }
-            // And return if the job successfully completed.
-            handle.success("Ok".to_string());
+            let result = fetch_things(handle.id());
+            // Set result and then extract later.
+            handle.set_result(result)
         }
     });
 
