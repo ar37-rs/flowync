@@ -10,26 +10,27 @@ fn drive() {
             for i in 1..20 {
                 handle.send(i);
             }
-            handle.error("Ok".to_string());
+            handle.success("Ok".to_string());
         }
     });
 
     let mut exit = false;
     let mut received_last_value = 0;
+    let mut sum = 0;
 
     loop {
         if flower.is_active() {
             flower
                 .extract(|channel| {
                     if let Some(value) = channel {
+                        sum += value;
                         received_last_value = value;
-                        println!("{}", value);
                     }
                 })
                 .finalize(|result| {
                     match result {
                         Ok(value) => {
-                            assert_eq!("Ok", &value);
+                            assert_eq!(String::from("Ok"), value);
                         }
                         _ => (),
                     }
@@ -44,4 +45,5 @@ fn drive() {
     }
 
     assert_eq!(received_last_value, 19);
+    assert_eq!(sum, 190);
 }
