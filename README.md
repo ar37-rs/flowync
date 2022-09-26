@@ -75,4 +75,4 @@ fn main() {
 ```
 
 ## More examples
-can be found here [here](https://github.com/Ar37-rs/flowync/tree/main/examples)
+can be found here: [examples](https://github.com/Ar37-rs/flowync/tree/main/examples) and here: [eframe tokio (sync/async) integration example](https://github.com/ar37-rs/eframe_tokio_app)
