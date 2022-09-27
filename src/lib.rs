@@ -249,8 +249,18 @@ where
         .await
     }
 
-    /// Set result value
+    /// Set `Result` value with verboser error message.
+    ///
+    /// (for more easier to keep in track with the real cause of the error)
     pub fn set_result(&self, r: Result<R, Box<dyn Error>>) {
+        match r {
+            Ok(val) => self.success(val),
+            Err(e) => self.error_verbose(e),
+        }
+    }
+
+    /// Set `Result` value with no verbose (simpler error message)
+    pub fn set_result_no_verbose(&self, r: Result<R, Box<dyn Error>>) {
         match r {
             Ok(val) => self.success(val),
             Err(e) => self.error(e),
@@ -266,6 +276,13 @@ where
     /// Set the Err value of the result.
     pub fn error(&self, e: impl ToString) {
         *self.state.mtx.lock().unwrap() = TypeOpt::Error(e.to_string());
+        self.state.result_ready.store(true, Ordering::Relaxed);
+    }
+
+    /// Set the Err value of the result with more verboser error message.
+    pub fn error_verbose(&self, e: Box<dyn Error>) {
+        let err_kind = format!("{:?}", e);
+        *self.state.mtx.lock().unwrap() = TypeOpt::Error(err_kind);
         self.state.result_ready.store(true, Ordering::Relaxed);
     }
 }

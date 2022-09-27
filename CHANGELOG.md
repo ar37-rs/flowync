@@ -1,7 +1,9 @@
 # Changelog
-## [4.6.2] - 2022-9-27
+## [4.6.3] - 2022-9-28
 - Make Flower uncloneable to avoid any kind of data races, added FlowerState as alternative.
 - Internal only: Replace `Option<S, R>` with `TypeOpt<S, R>` managing value of the sync (mtx) state.
+- Revert: don't use trait bound `Clone` on type `<S, R>` 
+- Added functionality to set verboser error message using `fn error_verbose`.
 
 ## [4.6.0] - 2022-9-26
 - Added 'set_result` and `try_result` fn for more simpler error handling.

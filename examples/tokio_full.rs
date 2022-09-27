@@ -29,7 +29,7 @@ async fn main() {
                 }
                 Err(e) => {
                     // Return error immediately if something not right, for example:
-                    return this.error(e);
+                    return this.error_verbose(e.into());
                 }
             }
 
