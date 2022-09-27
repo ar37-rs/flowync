@@ -1,4 +1,8 @@
 # Changelog
+## [4.6.1] - 2022-9-27
+- Make Flower uncloneable to avoid any kind of data races, added FlowerState as alternative.
+- Internal only: Replace `Option<S, R>` with `TypeOpt<S, R>` managing value of the sync (mtx) state.
+
 ## [4.6.0] - 2022-9-26
 - Added 'set_result` and `try_result` fn for more simpler error handling.
 - Added `IOError` type alias
