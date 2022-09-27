@@ -1,5 +1,5 @@
 # Changelog
-## [4.6.1] - 2022-9-27
+## [4.6.2] - 2022-9-27
 - Make Flower uncloneable to avoid any kind of data races, added FlowerState as alternative.
 - Internal only: Replace `Option<S, R>` with `TypeOpt<S, R>` managing value of the sync (mtx) state.
 

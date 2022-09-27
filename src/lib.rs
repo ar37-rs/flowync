@@ -1,6 +1,5 @@
 #![deny(unsafe_code)]
 use core::{
-    clone::Clone,
     fmt::{self, Debug, Formatter},
     future::Future,
     pin::Pin,
@@ -9,14 +8,15 @@ use core::{
 };
 use std::{
     error::Error,
+    mem,
     sync::{Condvar, Mutex},
 };
 use std::{sync::Arc, thread};
 
 enum TypeOpt<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     Channel(S),
     Success(R),
@@ -24,25 +24,20 @@ where
     None,
 }
 
-impl<S, R> Clone for TypeOpt<S, R>
+impl<S, R> Default for TypeOpt<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Channel(s) => Self::Channel(Clone::clone(s)),
-            Self::Success(r) => Self::Success(Clone::clone(r)),
-            Self::Error(e) => Self::Error(Clone::clone(e)),
-            Self::None => Self::None,
-        }
+    fn default() -> Self {
+        Self::None
     }
 }
 
 impl<S, R> Debug for TypeOpt<S, R>
 where
-    S: Send + Clone + Debug,
-    R: Send + Clone + Debug,
+    S: Send + Debug,
+    R: Send + Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -56,20 +51,18 @@ where
 
 impl<S, R> TypeOpt<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn take(&mut self) -> Self {
-        let _take = self.clone();
-        *self = TypeOpt::None;
-        _take
+        mem::take(self)
     }
 }
 
 struct InnerState<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     activated: AtomicBool,
     result_ready: AtomicBool,
@@ -81,8 +74,8 @@ where
 
 impl<S, R> Debug for InnerState<S, R>
 where
-    S: Debug + Send + Clone,
-    R: Debug + Send + Clone,
+    S: Debug + Send,
+    R: Debug + Send,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("InnerState")
@@ -98,8 +91,8 @@ where
 
 impl<S, R> Drop for InnerState<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn drop(&mut self) {}
 }
@@ -107,8 +100,8 @@ where
 /// State of the flower
 pub struct FlowerState<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     state: Arc<InnerState<S, R>>,
     async_suspender: Arc<(Mutex<Option<Waker>>, AtomicBool)>,
@@ -117,8 +110,8 @@ where
 
 impl<S, R> Debug for FlowerState<S, R>
 where
-    S: Send + Clone + Debug,
-    R: Send + Clone + Debug,
+    S: Send + Debug,
+    R: Send + Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("FlowerState")
@@ -131,8 +124,8 @@ where
 
 impl<S, R> FlowerState<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     /// Get ID of the flower.
     pub fn id(&self) -> usize {
@@ -159,8 +152,8 @@ where
 
 impl<S, R> Clone for FlowerState<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn clone(&self) -> Self {
         Self {
@@ -173,8 +166,8 @@ where
 
 impl<S, R> Drop for FlowerState<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn drop(&mut self) {}
 }
@@ -199,8 +192,8 @@ impl Future for AsyncSuspender {
 /// A handle for the Flower
 pub struct Handle<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     state: Arc<InnerState<S, R>>,
     async_suspender: Arc<(Mutex<Option<Waker>>, AtomicBool)>,
@@ -209,8 +202,8 @@ where
 
 impl<S, R> Handle<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     /// Get ID of the flower.
     pub fn id(&self) -> usize {
@@ -279,8 +272,8 @@ where
 
 impl<S, R> Clone for Handle<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn clone(&self) -> Self {
         Self {
@@ -293,8 +286,8 @@ where
 
 impl<S, R> Drop for Handle<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn drop(&mut self) {
         if thread::panicking() && !self.state.result_ready.load(Ordering::Relaxed) {
@@ -308,8 +301,8 @@ where
 
 impl<S, R> Debug for Handle<S, R>
 where
-    S: Debug + Send + Clone,
-    R: Debug + Send + Clone,
+    S: Debug + Send,
+    R: Debug + Send,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle")
@@ -320,12 +313,12 @@ where
     }
 }
 
-pub struct Extracted<'a, S: Send + Clone, R: Send + Clone>(&'a Flower<S, R>);
+pub struct Extracted<'a, S: Send, R: Send>(&'a Flower<S, R>);
 
 impl<S, R> Extracted<'_, S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     /// Try finalize result of the flower.
     pub fn finalize(self, f: impl FnOnce(Result<R, String>)) {
@@ -422,8 +415,8 @@ where
 /// ```
 pub struct Flower<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     state: Arc<InnerState<S, R>>,
     async_suspender: Arc<(Mutex<Option<Waker>>, AtomicBool)>,
@@ -432,8 +425,8 @@ where
 
 impl<S, R> Flower<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     pub fn new(id: usize) -> Self {
         Self {
@@ -566,8 +559,8 @@ where
 
 impl<S, R> Debug for Flower<S, R>
 where
-    S: Debug + Send + Clone,
-    R: Debug + Send + Clone,
+    S: Debug + Send,
+    R: Debug + Send,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Flower")
@@ -580,8 +573,8 @@ where
 
 impl<S, R> Drop for Flower<S, R>
 where
-    S: Send + Clone,
-    R: Send + Clone,
+    S: Send,
+    R: Send,
 {
     fn drop(&mut self) {
         if thread::panicking() {
