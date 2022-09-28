@@ -53,12 +53,7 @@ async fn main() {
     loop {
         if flower.is_active() {
             flower
-                .extract(|channel| {
-                    // Poll channel
-                    if let Some(value) = channel {
-                        println!("{}", value);
-                    }
-                })
+                .extract(|value| println!("{}", value))
                 .finalize(|result| {
                     match result {
                         Ok(elapsed) => println!(

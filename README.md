@@ -51,8 +51,7 @@ fn main() {
             // notify_loading_fn();
 
             flower
-                .extract(|channel| {
-                    // Poll channel
+                .poll(|channel| {
                     if let Some(value) = channel {
                         println!("{}", value);
                     }

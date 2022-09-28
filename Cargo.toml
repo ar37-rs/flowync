@@ -1,6 +1,6 @@
 [package]
 name = "flowync"
-version = "4.6.3"
+version = "4.8.0"
 authors = ["Ar37-rs <adyaro37@gmail.com>"]
 edition = "2021"
 description = "A simple utility for multithreading a/synchronization"

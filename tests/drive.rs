@@ -21,11 +21,9 @@ fn drive() {
     loop {
         if flower.is_active() {
             flower
-                .extract(|channel| {
-                    if let Some(value) = channel {
-                        sum += value;
-                        received_last_value = value;
-                    }
+                .extract(|value| {
+                    sum += value;
+                    received_last_value = value;
                 })
                 .finalize(|result| {
                     match result {
