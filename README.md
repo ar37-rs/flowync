@@ -1,7 +1,7 @@
 # Flowync
 
 [![Crates.io](https://img.shields.io/crates/v/flowync.svg)](https://crates.io/crates/flowync)
-![minimum rustc 1.61.0+](https://img.shields.io/badge/rustc-1.60.0+-blue.svg)
+![minimum rustc 1.60.0+](https://img.shields.io/badge/rustc-1.60.0+-blue.svg)
 [![CI](https://github.com/Ar37-rs/flowync/actions/workflows/ci.yml/badge.svg)](https://github.com/Ar37-rs/flowync/actions/workflows/ci.yml)
 [![Flowync documentation](https://docs.rs/flowync/badge.svg)](https://docs.rs/flowync)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
