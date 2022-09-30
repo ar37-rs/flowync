@@ -1,4 +1,7 @@
-use flowync::{Flower, IOError};
+use flowync::{
+    error::{Cause, IOError},
+    Flower,
+};
 type TestFlower = Flower<u32, String>;
 
 fn fetch_things(id: usize) -> Result<String, IOError> {
@@ -48,8 +51,14 @@ fn main() {
                 .finalize(|result| {
                     match result {
                         Ok(value) => println!("{}", value),
-                        Err(err_msg) => println!("{}", err_msg),
+                        Err(Cause::Suppose(msg)) => {
+                            println!("{}", msg)
+                        }
+                        Err(Cause::Panicked(_msg)) => {
+                            // Handle things if stuff unexpectedly panicked at runtime.
+                        }
                     }
+
                     // Exit if finalized
                     exit = true;
                 });

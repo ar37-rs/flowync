@@ -1,6 +1,4 @@
-// #![allow(clippy::needless_return)]
-
-use flowync::Flower;
+use flowync::{error::Cause, Flower};
 use std::{
     io::Error,
     time::{Duration, Instant},
@@ -80,7 +78,12 @@ fn main() {
                                 "the flower with id: {} finished in: {:?} milliseconds\n",
                                 id, elapsed
                             ),
-                            Err(err_msg) => println!("{}", err_msg),
+                            Err(Cause::Suppose(msg)) => {
+                                println!("{}", msg)
+                            }
+                            Err(Cause::Panicked(msg)) => {
+                                println!("{}", msg)
+                            }
                         }
                         done = true;
                     });

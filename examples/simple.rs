@@ -1,4 +1,7 @@
-use flowync::{Flower, IOError};
+use flowync::{
+    error::{Cause, IOError},
+    Flower,
+};
 type TestSimpleFlower = Flower<(), String>;
 
 fn fetch_things(id: usize) -> Result<String, IOError> {
@@ -31,7 +34,10 @@ fn main() {
             flower.try_result(|result| {
                 match result {
                     Ok(value) => println!("{}", value),
-                    Err(err_msg) => println!("{}", err_msg),
+                    Err(Cause::Suppose(msg)) => {
+                        println!("{}", msg)
+                    }
+                    _ => (),
                 }
                 exit = true;
             });

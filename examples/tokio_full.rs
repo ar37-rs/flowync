@@ -2,9 +2,7 @@
 // # Make sure to enable tokio "full" features (multithreaded support) like so:
 // tokio = { version = "1", features = ["full"] }
 
-// #![allow(clippy::needless_return)]
-
-use flowync::Flower;
+use flowync::{error::Cause, Flower};
 use std::{io::Error, time::Instant};
 
 type TestTokioFlower = Flower<String, u32>;
@@ -61,7 +59,12 @@ async fn main() {
                             flower.id(),
                             elapsed
                         ),
-                        Err(err_msg) => println!("{}", err_msg),
+                        Err(Cause::Suppose(msg)) => {
+                            println!("{}", msg)
+                        }
+                        Err(Cause::Panicked(msg)) => {
+                            println!("{}", msg)
+                        }
                     }
                     done = true;
                 });

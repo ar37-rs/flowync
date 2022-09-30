@@ -13,6 +13,8 @@ use std::{
 };
 use std::{sync::Arc, thread};
 
+use error::Cause;
+pub mod error;
 enum TypeOpt<S, R>
 where
     S: Send,
@@ -20,7 +22,7 @@ where
 {
     Channel(S),
     Success(R),
-    Error(String),
+    Error(Cause),
     None,
 }
 
@@ -136,7 +138,7 @@ where
     ///
     /// will do nothing if not explicitly configured on the `Handle`.
     pub fn cancel(&self) {
-        self.state.canceled.store(true, Ordering::Release);
+        self.state.canceled.store(true, Ordering::Relaxed);
     }
 
     /// Check if the `Flower` is canceled
@@ -212,7 +214,7 @@ where
 
     /// Activate current `Flower`
     pub fn activate(&self) {
-        self.state.activated.store(true, Ordering::Release);
+        self.state.activated.store(true, Ordering::Relaxed);
     }
 
     /// Check if the current `Flower` is active
@@ -230,8 +232,8 @@ where
         let mut mtx = self.state.mtx.lock().unwrap();
         {
             *mtx = TypeOpt::Channel(s);
-            self.state.channel_present.store(true, Ordering::Release);
-            self.async_suspender.1.store(false, Ordering::Release);
+            self.state.channel_present.store(true, Ordering::Relaxed);
+            self.async_suspender.1.store(false, Ordering::Relaxed);
         }
         drop(self.state.cvar.wait(mtx));
     }
@@ -240,8 +242,8 @@ where
     pub async fn send_async(&self, s: S) {
         {
             *self.state.mtx.lock().unwrap() = TypeOpt::Channel(s);
-            self.async_suspender.1.store(true, Ordering::Release);
-            self.state.channel_present.store(true, Ordering::Release);
+            self.async_suspender.1.store(true, Ordering::Relaxed);
+            self.state.channel_present.store(true, Ordering::Relaxed);
         }
         AsyncSuspender {
             inner: self.async_suspender.clone(),
@@ -270,20 +272,20 @@ where
     /// Set the `Ok` value of the `Result`.
     pub fn success(&self, r: R) {
         *self.state.mtx.lock().unwrap() = TypeOpt::Success(r);
-        self.state.result_ready.store(true, Ordering::Release);
+        self.state.result_ready.store(true, Ordering::Relaxed);
     }
 
     /// Set the `Err` value of the `Result`.
     pub fn error(&self, e: impl ToString) {
-        *self.state.mtx.lock().unwrap() = TypeOpt::Error(e.to_string());
-        self.state.result_ready.store(true, Ordering::Release);
+        *self.state.mtx.lock().unwrap() = TypeOpt::Error(Cause::Suppose(e.to_string()));
+        self.state.result_ready.store(true, Ordering::Relaxed);
     }
 
     /// Set the `Err` value of the `Result` with more verboser error message.
     pub fn error_verbose(&self, e: Box<dyn Error>) {
         let err_kind = format!("{:?}", e);
-        *self.state.mtx.lock().unwrap() = TypeOpt::Error(err_kind);
-        self.state.result_ready.store(true, Ordering::Release);
+        *self.state.mtx.lock().unwrap() = TypeOpt::Error(Cause::Suppose(err_kind));
+        self.state.result_ready.store(true, Ordering::Relaxed);
     }
 }
 
@@ -294,11 +296,10 @@ where
 {
     fn drop(&mut self) {
         if thread::panicking() && !self.state.result_ready.load(Ordering::Relaxed) {
-            self.state.channel_present.store(false, Ordering::Release);
-            self.error(format!(
-                "the flower handle with id: {} error, the thread panicked maybe?",
-                self.id
-            ));
+            self.state.channel_present.store(false, Ordering::Relaxed);
+            let err = format!("the flower handle with id: {} error panicked!", self.id);
+            *self.state.mtx.lock().unwrap() = TypeOpt::Error(Cause::Panicked(err));
+            self.state.result_ready.store(true, Ordering::Relaxed);
         }
     }
 }
@@ -327,20 +328,20 @@ where
     R: Send,
 {
     /// Try finalize `Result` of the `Flower` (this fn will be called if only `Result` is available).
-    pub fn finalize(self, f: impl FnOnce(Result<R, String>)) {
+    pub fn finalize(self, f: impl FnOnce(Result<R, Cause>)) {
         let Self::Try(flower) = self;
         if flower.state.result_ready.load(Ordering::Relaxed) {
             let result = move || {
                 let result = flower.state.mtx.lock().unwrap().take();
-                flower.state.result_ready.store(false, Ordering::Release);
-                flower.state.activated.store(false, Ordering::Release);
+                flower.state.result_ready.store(false, Ordering::Relaxed);
+                flower.state.activated.store(false, Ordering::Relaxed);
                 result
             };
             let result = result();
             if let TypeOpt::Success(value) = result {
-                f(Ok(value))
-            } else if let TypeOpt::Error(value) = result {
-                f(Err(value))
+                f(Result::Ok(value))
+            } else if let TypeOpt::Error(err_type) = result {
+                f(Result::Err(err_type))
             }
         }
     }
@@ -352,12 +353,12 @@ where
 ///
 /// `S` = type of the sender spsc channel value
 ///
-/// `R` = type of `Ok` value of the `Result` (`Result<R, String>`, and Err value always return `String`)
+/// `R` = type of `Ok` value of the `Result` (`Result<R, Cause>`) and `Cause` is the `Error` cause.
 ///
 /// # Quick Example:
 ///
 ///```
-/// use flowync::{Flower, IOError};
+/// use flowync::{error::{Cause, IOError}, Flower};
 /// type TestFlower = Flower<u32, String>;
 ///
 /// fn fetch_things(id: usize) -> Result<String, IOError> {
@@ -405,8 +406,14 @@ where
 ///                 .finalize(|result| {
 ///                     match result {
 ///                         Ok(value) => println!("{}", value),
-///                         Err(err_msg) => println!("{}", err_msg),
+///                         Err(Cause::Suppose(msg)) => {
+///                             println!("{}", msg)
+///                         }
+///                         Err(Cause::Panicked(_msg)) => {
+///                             // Handle things if stuff unexpectedly panicked at runtime.
+///                         }
 ///                     }
+///
 ///                     // Exit if finalized
 ///                     exit = true;
 ///                 });
@@ -455,7 +462,7 @@ where
 
     /// Get the handle.
     pub fn handle(&self) -> Handle<S, R> {
-        self.state.canceled.store(false, Ordering::Release);
+        self.state.canceled.store(false, Ordering::Relaxed);
         Handle {
             state: Clone::clone(&self.state),
             async_suspender: Clone::clone(&self.async_suspender),
@@ -479,7 +486,7 @@ where
     ///
     /// will do nothing if not explicitly configured on the `Handle`.
     pub fn cancel(&self) {
-        self.state.canceled.store(true, Ordering::Release);
+        self.state.canceled.store(true, Ordering::Relaxed);
     }
 
     /// Check if the `Flower` is canceled
@@ -507,24 +514,24 @@ where
     /// Note: (this fn will be called if only `Result` is available)
     ///
     /// **Warning!** don't use this fn if channel value is important, use `extract fn` and then use `finalize fn` instead.
-    pub fn try_result(&self, f: impl FnOnce(Result<R, String>)) {
+    pub fn try_result(&self, f: impl FnOnce(Result<R, Cause>)) {
         if self.state.channel_present.load(Ordering::Relaxed) {
             self.state.cvar.notify_all();
-            self.state.channel_present.store(false, Ordering::Release)
+            self.state.channel_present.store(false, Ordering::Relaxed)
         }
         if self.state.result_ready.load(Ordering::Relaxed) {
             let _self = self;
             let result = move || {
                 let result = _self.state.mtx.lock().unwrap().take();
-                _self.state.result_ready.store(false, Ordering::Release);
-                _self.state.activated.store(false, Ordering::Release);
+                _self.state.result_ready.store(false, Ordering::Relaxed);
+                _self.state.activated.store(false, Ordering::Relaxed);
                 result
             };
             let result = result();
             if let TypeOpt::Success(value) = result {
                 f(Ok(value))
-            } else if let TypeOpt::Error(value) = result {
-                f(Err(value))
+            } else if let TypeOpt::Error(err_type) = result {
+                f(Err(err_type))
             }
         }
     }
@@ -536,10 +543,10 @@ where
         if self.state.channel_present.load(Ordering::Relaxed) {
             let channel = move || {
                 let channel = self.state.mtx.lock().unwrap().take();
-                self.state.channel_present.store(false, Ordering::Release);
+                self.state.channel_present.store(false, Ordering::Relaxed);
                 if self.async_suspender.1.load(Ordering::Relaxed) {
                     let mut mg_opt_waker = self.async_suspender.0.lock().unwrap();
-                    self.async_suspender.1.store(false, Ordering::Release);
+                    self.async_suspender.1.store(false, Ordering::Relaxed);
                     if let Some(waker) = mg_opt_waker.take() {
                         waker.wake();
                     }
@@ -562,10 +569,10 @@ where
         if self.state.channel_present.load(Ordering::Relaxed) {
             let channel = move || {
                 let channel = self.state.mtx.lock().unwrap().take();
-                self.state.channel_present.store(false, Ordering::Release);
+                self.state.channel_present.store(false, Ordering::Relaxed);
                 if self.async_suspender.1.load(Ordering::Relaxed) {
                     let mut mg_opt_waker = self.async_suspender.0.lock().unwrap();
-                    self.async_suspender.1.store(false, Ordering::Release);
+                    self.async_suspender.1.store(false, Ordering::Relaxed);
                     if let Some(waker) = mg_opt_waker.take() {
                         waker.wake();
                     }
@@ -609,10 +616,6 @@ where
 {
     fn drop(&mut self) {}
 }
-
-pub type IOError = Box<dyn Error>;
-/// Alternative alias to avoid conflict with other crate type
-pub type OIError = IOError;
 
 /// A converter to convert `Option<T>` into `Result<T, E>` using `catch` fn.
 pub trait IntoResult<T> {

@@ -1,4 +1,7 @@
 # Changelog
+## [5.0.0]
+- On Error: Support handling unexpected panic at runtime.
+
 ## [4.8.0] - 2022-9-28
 - Make Flower and Handle uncloneable to avoid any kind of deadlock and data races, added FlowerState as alternative.
 - Internal only: Replace `Option<S, R>` with `TypeOpt<S, R>` managing value of the sync (mtx) state.

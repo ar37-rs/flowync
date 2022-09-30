@@ -6,17 +6,17 @@
 [![Flowync documentation](https://docs.rs/flowync/badge.svg)](https://docs.rs/flowync)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
 
-
-
 ## Quick Example
 
 ```rust
-use flowync::{Flower, IOError};
+use flowync::{error::{Cause, IOError}, Flower};
 type TestFlower = Flower<u32, String>;
 
 fn fetch_things(id: usize) -> Result<String, IOError> {
-    let result =
-        Ok::<String, IOError>(format!("the flower with id: {} successfully completed fetching.", id));
+    let result = Ok::<String, IOError>(format!(
+        "the flower with id: {} successfully completed fetching.",
+        id
+    ));
     let success = result?;
     Ok(success)
 }
@@ -59,8 +59,14 @@ fn main() {
                 .finalize(|result| {
                     match result {
                         Ok(value) => println!("{}", value),
-                        Err(err_msg) => println!("{}", err_msg),
+                        Err(Cause::Suppose(msg)) => {
+                            println!("{}", msg)
+                        }
+                        Err(Cause::Panicked(_msg)) => {
+                            // Handle things if stuff unexpectedly panicked at runtime.
+                        }
                     }
+                    
                     // Exit if finalized
                     exit = true;
                 });
@@ -74,4 +80,7 @@ fn main() {
 ```
 
 ## More examples
-can be found here: [examples](https://github.com/Ar37-rs/flowync/tree/main/examples) and here: [eframe tokio (sync/async) integration example](https://github.com/ar37-rs/eframe_tokio_app)
+
+can be found here:
+[examples](https://github.com/Ar37-rs/flowync/tree/main/examples) and here:
+[eframe tokio (sync/async) integration example](https://github.com/ar37-rs/eframe_tokio_app)
