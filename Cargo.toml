@@ -1,6 +1,6 @@
 [package]
 name = "flowync"
-version = "5.0.0"
+version = "5.0.1"
 authors = ["Ar37-rs <adyaro37@gmail.com>"]
 edition = "2021"
 description = "A simple utility for multithreading a/synchronization"
@@ -10,6 +10,13 @@ keywords = ["async", "sync", "std", "multi-thread", "non-blocking"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Ar37-rs/flowync"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+compact = []
+
+[[example]]
+name = "compact"
+required-features = ["compact"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

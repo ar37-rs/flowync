@@ -1,6 +1,7 @@
 # Changelog
-## [5.0.0]
+## [5.0.1] 2022-10-1
 - On Error: Support handling unexpected panic at runtime.
+- Added CompactFlower, a Flower with composable error message (can be enable using `features = ["compact"]` )
 
 ## [4.8.0] - 2022-9-28
 - Make Flower and Handle uncloneable to avoid any kind of deadlock and data races, added FlowerState as alternative.
