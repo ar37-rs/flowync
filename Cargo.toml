@@ -12,7 +12,6 @@ repository = "https://github.com/Ar37-rs/flowync"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["compact"]
 compact = []
 
 [[example]]
