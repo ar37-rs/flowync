@@ -10,7 +10,7 @@ enum ErrMessage {
     Other,
 }
 
-type TestFlower = CompactFlower<u32, String, ErrMessage>;
+type TestCompactFlower = CompactFlower<u32, String, ErrMessage>;
 
 fn fetch_things(id: usize) -> Result<String, IOError> {
     let result = Ok::<String, IOError>(format!(
@@ -22,9 +22,9 @@ fn fetch_things(id: usize) -> Result<String, IOError> {
 }
 
 fn main() {
-    let flower: TestFlower = CompactFlower::new(1);
+    let compact_flower: TestCompactFlower = CompactFlower::new(1);
     std::thread::spawn({
-        let handle = flower.handle();
+        let handle = compact_flower.handle();
         // Activate
         handle.activate();
         move || {
@@ -47,14 +47,14 @@ fn main() {
     let mut exit = false;
 
     loop {
-        // Check if the flower is_active()
+        // Check if the compact flower is_active()
         // and will deactivate itself if the result value successfully received.
-        if flower.is_active() {
+        if compact_flower.is_active() {
             // another logic goes here...
             // e.g:
             // notify_loading_fn();
 
-            flower
+            compact_flower
                 .poll(|channel| {
                     if let Some(value) = channel {
                         println!("{}", value);

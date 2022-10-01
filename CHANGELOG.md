@@ -1,5 +1,6 @@
 # Changelog
-## [5.0.1] - 2022-10-1
+## [5.1.0] - 2022-10-1
+- Clean up code.
 - On Error: Support handling unexpected panic at runtime.
 - Added CompactFlower, a Flower with composable error message (can be enabled using `features = ["compact"]` )
 

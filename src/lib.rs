@@ -81,8 +81,8 @@ where
 
 impl<S, R> Debug for InnerState<S, R>
 where
-    S: Debug + Send,
-    R: Debug + Send,
+    S: Send + Debug,
+    R: Send + Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("InnerState")
@@ -311,8 +311,8 @@ where
 
 impl<S, R> Debug for Handle<S, R>
 where
-    S: Debug + Send,
-    R: Debug + Send,
+    S: Send + Debug,
+    R: Send + Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Handle")
@@ -597,8 +597,8 @@ where
 
 impl<S, R> Debug for Flower<S, R>
 where
-    S: Debug + Send,
-    R: Debug + Send,
+    S: Send + Debug,
+    R: Send + Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("Flower")

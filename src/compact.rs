@@ -14,6 +14,7 @@ enum CompactTypeOpt<S, R, E>
 where
     S: Send,
     R: Send,
+    E: Send,
 {
     Channel(S),
     Success(R),
@@ -25,6 +26,7 @@ impl<S, R, E> Default for CompactTypeOpt<S, R, E>
 where
     S: Send,
     R: Send,
+    E: Send,
 {
     fn default() -> Self {
         Self::None
@@ -35,7 +37,7 @@ impl<S, R, E> Debug for CompactTypeOpt<S, R, E>
 where
     S: Send + Debug,
     R: Send + Debug,
-    E: std::fmt::Debug,
+    E: Send + Debug,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
@@ -51,6 +53,7 @@ impl<S, R, E> CompactTypeOpt<S, R, E>
 where
     S: Send,
     R: Send,
+    E: Send,
 {
     fn take(&mut self) -> Self {
         mem::take(self)
@@ -61,6 +64,7 @@ struct InnerState<S, R, E>
 where
     S: Send,
     R: Send,
+    E: Send,
 {
     activated: AtomicBool,
     result_ready: AtomicBool,
@@ -92,6 +96,7 @@ impl<S, R, E> Drop for InnerState<S, R, E>
 where
     S: Send,
     R: Send,
+    E: Send,
 {
     fn drop(&mut self) {}
 }

@@ -1,6 +1,6 @@
 [package]
 name = "flowync"
-version = "5.0.1"
+version = "5.1.0"
 authors = ["Ar37-rs <adyaro37@gmail.com>"]
 edition = "2021"
 description = "A simple utility for multithreading a/synchronization"
@@ -12,6 +12,7 @@ repository = "https://github.com/Ar37-rs/flowync"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
+default = ["compact"]
 compact = []
 
 [[example]]
